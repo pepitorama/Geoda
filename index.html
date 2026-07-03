@@ -71,6 +71,16 @@
     transition: transform .12s ease, color .15s;
   }
   #help-btn:hover { transform: scale(1.1); color: var(--text); }
+  #speed-btn {
+    position: fixed; top: 14px; right: 58px; z-index: 11;
+    height: 36px; min-width: 44px; padding: 0 12px; border-radius: 18px;
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--dim); font-size: 14px; font-weight: 800; cursor: pointer;
+    transition: transform .12s ease, color .15s, border-color .15s;
+    display: none;
+  }
+  #speed-btn:hover { transform: scale(1.05); color: var(--text); }
+  #speed-btn.fast { color: var(--gold); border-color: rgba(255,201,74,.5); }
 
   /* ---------- Barra inferior ---------- */
   #toolbar {
@@ -439,6 +449,7 @@
 </div>
 
 <button id="help-btn" title="Ayuda (H)">?</button>
+<button id="speed-btn" title="Velocidad (F)">1×</button>
 
 <div id="toolbar"></div>
 

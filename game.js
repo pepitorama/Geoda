@@ -96,6 +96,7 @@ const state = {
   ascension: 0,          // nivel de Ascensión de esta partida
   customTerrain: null,   // { rocks:[{x,y,r}], spots:[{x,y}] } del editor
   editing: false,
+  speed: 1,              // avance rápido: 1×, 2× o 3×
   difficulty: "normal",
   energy: 0, score: 0, wave: 0,
   coreHp: 100, coreMaxHp: 100, corePulse: 0,
@@ -1336,7 +1337,13 @@ function frame(now) {
   lastTime = now;
   if (dt > 0) fpsEma = fpsEma * 0.95 + (1 / dt) * 0.05;
   if (!meta.settings.reduced) updateFireflies(dt);
-  if (state.running && !state.gameOver && !state.paused && !state.drafting) update(dt);
+  if (state.running && !state.gameOver && !state.paused && !state.drafting) {
+    // Avance rápido: varios sub-pasos con dt pequeño → física estable
+    const steps = state.speed;
+    for (let i = 0; i < steps && state.running && !state.gameOver && !state.paused && !state.drafting; i++) {
+      update(dt);
+    }
+  }
   render();
   requestAnimationFrame(frame);
 }
@@ -3024,6 +3031,20 @@ function setPause(on) {
   document.getElementById("paused").classList.toggle("hidden", !on);
 }
 
+const speedBtn = document.getElementById("speed-btn");
+function setSpeed(s) {
+  state.speed = s;
+  speedBtn.textContent = `${s}×`;
+  speedBtn.classList.toggle("fast", s > 1);
+}
+function cycleSpeed() {
+  setSpeed(state.speed >= 3 ? 1 : state.speed + 1);
+}
+function showSpeedBtn(show) {
+  speedBtn.style.display = show ? "block" : "none";
+}
+speedBtn.addEventListener("click", cycleSpeed);
+
 function overlayOpen(id) { return !document.getElementById(id).classList.contains("hidden"); }
 
 function openHelp() {
@@ -3048,6 +3069,7 @@ window.addEventListener("keydown", (ev) => {
     return;
   }
   if (ev.code === "KeyM") { ensureAudio(); toggleMute(); return; }
+  if (ev.code === "KeyF") { if (state.running && !state.gameOver) cycleSpeed(); return; }
   if (ev.code === "Equal" || ev.code === "NumpadAdd") { ensureAudio(); setVolume(meta.volume + 0.1); showToast("🎚️", t("volume", Math.round(meta.volume * 100)), "+/-"); return; }
   if (ev.code === "Minus" || ev.code === "NumpadSubtract") { ensureAudio(); setVolume(meta.volume - 0.1); showToast("🎚️", t("volume", Math.round(meta.volume * 100)), "+/-"); return; }
   if (state.paused || state.drafting) return;
@@ -3377,6 +3399,7 @@ function goToMenu() {
   state.gameOver = false;
   state.drafting = false;
   setBossMusic(false);
+  showSpeedBtn(false);
   nextWaveBtn.style.display = "none";
   wavePreview.style.display = "none";
   waveProgressWrap.style.display = "none";
@@ -3404,6 +3427,8 @@ function resetGame(difficulty, opts) {
   state.ascension = opts.ascension || 0;
   state.customTerrain = opts.customTerrain || null;
   state.editing = false;
+  setSpeed(1);
+  showSpeedBtn(true);
   state.seed = opts.seed !== undefined ? opts.seed : ((Math.random() * 0x7fffffff) | 0);
   // El diario rota de mapa según la fecha; el resto usa la selección del menú
   state.layout = opts.layout || (opts.daily ? D.LAYOUT_ORDER[state.seed % D.LAYOUT_ORDER.length] : menuLayout);
