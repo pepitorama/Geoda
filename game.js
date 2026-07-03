@@ -97,6 +97,7 @@ const state = {
   customTerrain: null,   // { rocks:[{x,y,r}], spots:[{x,y}] } del editor
   editing: false,
   speed: 1,              // avance rápido: 1×, 2× o 3×
+  sentinel: null,        // guardián controlable (si está desbloqueado)
   difficulty: "normal",
   energy: 0, score: 0, wave: 0,
   coreHp: 100, coreMaxHp: 100, corePulse: 0,
@@ -1164,6 +1165,26 @@ function fireOverdrive() {
   for (const tw of state.towers) burst(tw.x, tw.y, "#ff9a3c", 6, 2);
 }
 
+function fireNova() {
+  const sen = state.sentinel;
+  if (!sen || sen.novaCd > 0 || !state.running || state.gameOver || state.paused || state.drafting) {
+    if (sen && sen.novaCd > 0) sfx.error();
+    return;
+  }
+  const S = D.SENTINEL;
+  sen.novaCd = S.novaCd * relicCdMult();
+  sfx.freeze();
+  state.shake = Math.max(state.shake, 6);
+  state.shockwaves.push({ x: sen.x, y: sen.y, r: 6, max: S.novaRadius, life: 0.7, color: S.glow + "1)" });
+  burst(sen.x, sen.y, S.color, 26, 5);
+  forEnemiesNear(sen.x, sen.y, S.novaRadius, (e) => {
+    if (!targetable(e) || dist2(e.x, e.y, sen.x, sen.y) > S.novaRadius * S.novaRadius) return;
+    damageEnemy(e, S.novaDmg, null, { tag: "sentinel" });
+    if (!e.slowImmune) { e.slowUntil = state.time + 1.5; e.slowFactor = 0.4; }
+  });
+  unlockAchievement("guardian");
+}
+
 // ---------- Reliquias (draft) ----------
 function openDraft() {
   const available = Object.keys(D.RELICS).filter(id => !hasRelic(id));
@@ -1766,6 +1787,34 @@ function update(dt) {
   }
   state.projectiles = state.projectiles.filter(p => !p.dead);
 
+  // El Centinela: sigue el cursor durante la oleada y dispara solo
+  if (state.sentinel) {
+    const S = D.SENTINEL;
+    const sen = state.sentinel;
+    // Objetivo: el cursor si está sobre el campo y en oleada; si no, reposa junto al núcleo
+    let tx = CX, ty = CY - 70;
+    const overUI = state.mouseY > H - 120 || state.mouseY < 60;
+    if (state.phase === "wave" && !overUI && state.mouseX > 0) { tx = state.mouseX; ty = state.mouseY; }
+    sen.x += (tx - sen.x) * Math.min(1, S.follow * dt);
+    sen.y += (ty - sen.y) * Math.min(1, S.follow * dt);
+    sen.trail.push({ x: sen.x, y: sen.y });
+    if (sen.trail.length > 10) sen.trail.shift();
+    if (sen.novaCd > 0) sen.novaCd = Math.max(0, sen.novaCd - dt);
+    sen.cd -= dt;
+    if (sen.cd <= 0) {
+      const tgt = pickTarget({ x: sen.x, y: sen.y, priority: "core" }, S.range);
+      if (tgt) {
+        sen.cd = S.rate;
+        state.projectiles.push({
+          kind: "homing", x: sen.x, y: sen.y, target: tgt,
+          speed: S.projSpeed, dmg: S.dmg, color: S.color, source: null,
+          slowFactor: 0.7, slowTime: 1, splash: 0, trail: [],
+        });
+        sfx.shoot();
+      }
+    }
+  }
+
   // Charcos de magma
   for (const pool of state.pools) {
     if (state.time > pool.nextTick) {
@@ -2038,6 +2087,7 @@ function render() {
   for (const bm of state.beams) drawChainBeam(bm);
   drawDiamondBeams();
   for (const p of state.projectiles) drawProjectile(p);
+  if (state.sentinel) drawSentinel();
   for (const sw of state.shockwaves) drawShockwave(sw);
   for (const pt of state.particles) drawParticle(pt);
   for (const tx of state.texts) drawText(tx);
@@ -2680,6 +2730,63 @@ function drawProjectile(p) {
   ctx.shadowBlur = 0;
 }
 
+function drawSentinel() {
+  const sen = state.sentinel;
+  const S = D.SENTINEL;
+  // Estela
+  for (let i = 0; i < sen.trail.length; i++) {
+    const tp = sen.trail[i];
+    ctx.globalAlpha = (i / sen.trail.length) * 0.35;
+    ctx.fillStyle = S.color;
+    ctx.beginPath();
+    ctx.arc(tp.x, tp.y, 3 * (i / sen.trail.length), 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // Radio de alcance tenue durante la oleada
+  if (state.phase === "wave") {
+    ctx.strokeStyle = S.glow + "0.18)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(sen.x, sen.y, S.range, 0, TAU);
+    ctx.stroke();
+  }
+  // Cuerpo: núcleo brillante + anillo giratorio + satélites
+  ctx.save();
+  ctx.translate(sen.x, sen.y);
+  ctx.shadowColor = S.color;
+  ctx.shadowBlur = 16;
+  const ready = sen.novaCd <= 0;
+  ctx.fillStyle = ready ? "#eaffff" : S.color;
+  ctx.beginPath();
+  ctx.arc(0, 0, 8, 0, TAU);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = S.glow + (ready ? "0.9)" : "0.5)");
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, 12 + (ready ? Math.sin(state.time * 5) * 1.5 : 0), 0, TAU);
+  ctx.stroke();
+  for (let i = 0; i < 3; i++) {
+    const a = state.time * 2.2 + i * TAU / 3;
+    ctx.fillStyle = S.color;
+    ctx.beginPath();
+    ctx.arc(Math.cos(a) * 15, Math.sin(a) * 15, 2.2, 0, TAU);
+    ctx.fill();
+  }
+  ctx.restore();
+  // Estado de la nova
+  ctx.font = "700 10px 'Segoe UI', sans-serif";
+  ctx.textAlign = "center";
+  if (ready) {
+    ctx.fillStyle = "rgba(125,252,255,0.9)";
+    ctx.fillText("G", sen.x, sen.y + 24);
+  } else {
+    ctx.fillStyle = "rgba(154,146,201,0.8)";
+    ctx.fillText(Math.ceil(sen.novaCd) + "s", sen.x, sen.y + 24);
+  }
+}
+
 function drawShockwave(sw) {
   ctx.strokeStyle = sw.color || "rgba(82,229,165,1)";
   ctx.globalAlpha = clamp(sw.life, 0, 1) * 0.8;
@@ -3076,6 +3183,7 @@ window.addEventListener("keydown", (ev) => {
   if (ev.code === "KeyQ") { ensureAudio(); useAbility("storm"); return; }
   if (ev.code === "KeyE") { ensureAudio(); useAbility("shield"); return; }
   if (ev.code === "KeyR") { ensureAudio(); useAbility("over"); return; }
+  if (ev.code === "KeyG") { ensureAudio(); fireNova(); return; }
   if (ev.code === "KeyT" && state.hoverTower) { cyclePriority(state.hoverTower); return; }
   const idx = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8"].indexOf(ev.code);
   if (idx >= 0) {
@@ -3293,6 +3401,30 @@ function buildUnlockGrid() {
     el.appendChild(btn);
     grid.appendChild(el);
   }
+  // El Centinela (guardián controlable, no es una torre de la barra)
+  {
+    const S = D.SENTINEL;
+    const owned = meta.unlocked.sentinel;
+    const el = document.createElement("div");
+    el.className = "shop-item";
+    el.innerHTML = `<span class="s-icon" style="color:${S.color}">🛡️</span>` +
+      `<div class="s-body"><div class="s-name">${tn(S.name)}</div>` +
+      `<div class="s-desc">${tn(S.desc)}</div></div>`;
+    const btn = document.createElement("button");
+    btn.textContent = owned ? t("unlockedLbl") : t("unlockFor", S.metaUnlock);
+    btn.disabled = owned || meta.fragments < S.metaUnlock;
+    btn.addEventListener("click", () => {
+      if (owned || meta.fragments < S.metaUnlock) return;
+      meta.fragments -= S.metaUnlock;
+      meta.unlocked.sentinel = true;
+      metaSave();
+      sfx.evolve();
+      buildUnlockGrid();
+      updateMetaRow();
+    });
+    el.appendChild(btn);
+    grid.appendChild(el);
+  }
 }
 
 function buildShop() {
@@ -3474,6 +3606,9 @@ function resetGame(difficulty, opts) {
   state.time = 0;
   state.shake = 0;
   state.stats = freshStats();
+  state.sentinel = meta.unlocked.sentinel
+    ? { x: CX, y: CY - 70, cd: 0, novaCd: 0, trail: [] }
+    : null;
   genTerrain();
   buildBackdrop();
   hideTowerPopup();

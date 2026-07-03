@@ -297,6 +297,20 @@
   // Cada victoria en modo libre al nivel máximo desbloquea el siguiente
   const ASCENSION = { hpPer: 0.08, speedPer: 0.02, bountyPer: 0.02, scorePer: 0.2, max: 10 };
 
+  // ---------- El Centinela (guardián controlable) ----------
+  const SENTINEL = {
+    metaUnlock: 200,
+    dmg: 11, rate: 0.42, range: 118, projSpeed: 640,
+    follow: 6.5,                 // suavizado del seguimiento al cursor
+    novaCd: 18, novaDmg: 70, novaRadius: 135,
+    color: "#7dfcff", glow: "rgba(125,252,255,",
+    name: { es: "Centinela", en: "Sentinel" },
+    desc: {
+      es: "Un guardián que sigue tu cursor y dispara solo durante las oleadas. Pulsa G para su nova de escarcha.",
+      en: "A guardian that follows your cursor and auto-fires during waves. Press G for its frost nova.",
+    },
+  };
+
   // ---------- Habilidades ----------
   const ABILITIES = [
     { id: "pulse", icon: "⚡", name: { es: "Pulso", en: "Pulse" }, key: "ESP", keyEn: "SPC", code: "Space", cd: 25, unlock: 0, desc: { es: "Onda que daña y empuja alrededor del núcleo.", en: "Wave that damages and knocks back around the core." } },
@@ -337,6 +351,7 @@
     { id: "perfectionist", icon: "🌟", name: { es: "Perfeccionista", en: "Perfectionist" }, desc: { es: "Consigue 3 estrellas en un nivel", en: "Earn 3 stars on a level" }, frag: 20 },
     { id: "architect", icon: "🛠️", name: { es: "Arquitecto", en: "Architect" }, desc: { es: "Juega un mapa del editor", en: "Play a map from the editor" }, frag: 15 },
     { id: "ascended", icon: "☄️", name: { es: "Ascendido", en: "Ascended" }, desc: { es: "Gana una partida con Ascensión", en: "Win a run with Ascension" }, frag: 30 },
+    { id: "guardian", icon: "🛡️", name: { es: "Guardián", en: "Guardian" }, desc: { es: "Lanza la nova del Centinela", en: "Fire the Sentinel's nova" }, frag: 15 },
   ];
 
   // ---------- Economía y progresión ----------
@@ -474,6 +489,7 @@
       ascDesc: (n) => n === 0 ? "Sin modificadores" : `+${8 * n}% vida y +${2 * n}% velocidad enemiga · ×${(1 + 0.2 * n).toFixed(1)} puntuación`,
       ascUnlocked: (n) => `¡Ascensión ${n} desbloqueada!`,
       ascBanner: (n) => `☄️ Ascensión ${n}`,
+      sentinelTitle: "🛡 El Centinela", novaReady: "Nova lista (G)", novaCd: (s) => `Nova ${s}s`,
       helpBody: [
         "<h3>Controles</h3>",
         "<kbd>Clic</kbd> colocar torre / mejorar / evolucionar &nbsp; <kbd>Clic dcho.</kbd> vender (60%) &nbsp; <kbd>1-6</kbd> elegir cristal &nbsp; <kbd>T</kbd> prioridad de la torre bajo el cursor<br>",
@@ -488,6 +504,7 @@
         "· Los <b>élites</b> dorados llevan afijos: regenerador, veloz o escudado.<br>",
         "· Cada jefe tiene identidad propia: el Devorador se enfurece, la Tejedora invoca, el Coloso se escuda.<br>",
         "· El <b>desafío diario</b> usa la misma semilla para todo el mundo: mismo terreno, mismas oleadas.<br>",
+        "· El <b>Centinela</b> (desbloqueable) sigue tu cursor y dispara solo; pulsa <kbd>G</kbd> para su nova de escarcha.<br>",
         "· La partida se <b>guarda sola</b> entre oleadas.",
       ].join("\n"),
     },
@@ -567,6 +584,7 @@
       ascDesc: (n) => n === 0 ? "No modifiers" : `+${8 * n}% enemy HP and +${2 * n}% speed · ×${(1 + 0.2 * n).toFixed(1)} score`,
       ascUnlocked: (n) => `Ascension ${n} unlocked!`,
       ascBanner: (n) => `☄️ Ascension ${n}`,
+      sentinelTitle: "🛡 The Sentinel", novaReady: "Nova ready (G)", novaCd: (s) => `Nova ${s}s`,
       helpBody: [
         "<h3>Controls</h3>",
         "<kbd>Click</kbd> place / upgrade / evolve &nbsp; <kbd>Right-click</kbd> sell (60%) &nbsp; <kbd>1-6</kbd> pick crystal &nbsp; <kbd>T</kbd> targeting priority under cursor<br>",
@@ -581,6 +599,7 @@
         "· Golden <b>elites</b> carry affixes: regenerating, swift or shielded.<br>",
         "· Each boss has its own identity: the Devourer enrages, the Weaver summons, the Colossus shields.<br>",
         "· The <b>daily challenge</b> uses one seed for everyone: same terrain, same waves.<br>",
+        "· The <b>Sentinel</b> (unlockable) follows your cursor and auto-fires; press <kbd>G</kbd> for its frost nova.<br>",
         "· Your run <b>auto-saves</b> between waves.",
       ].join("\n"),
     },
@@ -594,7 +613,7 @@
     BOSS_KINDS, BOSS_ROTATION, bossKindForWave,
     ELITE_AFFIXES, MUTATORS, MUTATOR_CHANCE, MUTATOR_MIN_WAVE,
     RELICS, RELIC_INTERVAL, LAYOUTS, LAYOUT_ORDER,
-    CAMPAIGN, STAR_THRESHOLDS, STAR_REWARD, ASCENSION,
+    CAMPAIGN, STAR_THRESHOLDS, STAR_REWARD, ASCENSION, SENTINEL,
     ABILITIES, SHOP, shopCost, ACHIEVEMENTS,
     ECON, waveComposition, STRINGS,
   };

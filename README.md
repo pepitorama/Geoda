@@ -1,11 +1,21 @@
-# 💎 GEODA — Defiende el Núcleo · v6 «Edición Arquitecto»
+# 💎 GEODA — Defiende el Núcleo · v7 «Edición Centinela»
 
 Un juego de **defiende tu base** (tower defense) hecho en HTML5 Canvas puro.
 Sin dependencias, sin build: abre `index.html` en el navegador y juega.
 En español e inglés, en escritorio y táctil. Instalable como **PWA** con
 juego sin conexión cuando se sirve por HTTP.
 
-## 🆕 Novedades de la v6
+## 🆕 Novedades de la v7
+
+- **🛡️ El Centinela** (desbloqueable con fragmentos): un **guardián que sigue
+  tu cursor y dispara solo** durante las oleadas — el ratón pasa a tener doble
+  uso (mover = dirigir al guardián, clic = construir). Ralentiza a lo que
+  golpea y tiene su propia **nova de escarcha** con la tecla `G`. Añade una
+  capa de juego *activo* encima del tower defense clásico.
+- **Avance rápido 1×/2×/3×** (botón arriba a la derecha o tecla `F`).
+- Logro nuevo (Guardián). No altera el equilibrio de quien no lo compre.
+
+## Novedades de la v6
 
 - **🛠 Editor de mapas**: diseña tu propia caverna colocando rocas (con
   tamaño ajustable) y vetas de poder, pruébala al instante y compártela con
