@@ -41,6 +41,7 @@ function loadMeta() {
     unlocked: { opal: false, obsidian: false },
     records: {},           // "normal|gorge" -> mejor puntuación
     layoutsPlayed: {},
+    campaign: {},          // "c3" -> estrellas (0-3)
   };
   try {
     const raw = localStorage.getItem(META_KEY);
@@ -55,6 +56,7 @@ function loadMeta() {
         unlocked: { ...def.unlocked, ...(m.unlocked || {}) },
         records: m.records || {},
         layoutsPlayed: m.layoutsPlayed || {},
+        campaign: m.campaign || {},
       };
     }
   } catch (e) { /* meta corrupta: empezar de cero */ }
@@ -78,14 +80,17 @@ function t(key, ...args) {
 function tn(obj) { return obj && typeof obj === "object" ? (obj[L()] || obj.es) : obj; } // nombres de data.js
 
 // ---------- Estado ----------
-// Una torre está disponible si no requiere desbloqueo o ya se compró
-const towerUnlocked = (type) => !D.TOWER_TYPES[type].metaUnlock || meta.unlocked[type];
+// Una torre está disponible si no requiere desbloqueo o ya se compró,
+// y el nivel de campaña actual no la prohíbe
+const towerUnlocked = (type) => (!D.TOWER_TYPES[type].metaUnlock || meta.unlocked[type]) &&
+  !(state.campaign && state.campaign.banned && state.campaign.banned.includes(type));
 const visibleTowers = () => D.TOWER_ORDER.filter(towerUnlocked);
 
 const state = {
   running: false, gameOver: false, paused: false, drafting: false,
   endless: false, daily: false, shared: false, seed: 0,
   layout: "cavern",
+  campaign: null,        // definición del nivel de campaña activo
   difficulty: "normal",
   energy: 0, score: 0, wave: 0,
   coreHp: 100, coreMaxHp: 100, corePulse: 0,
@@ -110,6 +115,8 @@ function freshStats() {
   return { kills: 0, dmgDealt: 0, towersBuilt: 0, perfectWaves: 0, gems: 0, crits: 0, dmgByType: {} };
 }
 state.stats = freshStats();
+
+const winWave = () => state.campaign ? state.campaign.waves : WIN_WAVE;
 
 const hasRelic = (id) => state.relics.includes(id);
 const relicCostMult = () => hasRelic("market") ? 0.9 : 1;
@@ -358,6 +365,33 @@ function genTerrain() {
     return; // campo abierto: sin rocas ni vetas
   }
 
+  if (layout === "ring") {
+    // Muralla circular con tres brechas alrededor del núcleo
+    const R = Math.min(W, H) * 0.34;
+    const gapCenter = rng() * TAU;
+    const gaps = [gapCenter, gapCenter + TAU / 3, gapCenter + (2 * TAU) / 3];
+    const n = 18;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      const nearGap = gaps.some(ga => {
+        let d = Math.abs(((a - ga) % TAU + TAU) % TAU);
+        if (d > Math.PI) d = TAU - d;
+        return d < 0.32;
+      });
+      if (nearGap) continue;
+      addRock(CX + Math.cos(a) * R, CY + Math.sin(a) * R, rr(26, 40));
+    }
+    // Vetas junto a las brechas: los puntos calientes de la defensa
+    for (const ga of gaps) {
+      state.spots.push({
+        x: clamp(CX + Math.cos(ga) * (R - 60), 60, W - 60),
+        y: clamp(CY + Math.sin(ga) * (R - 60), 60, H - 60),
+        r: 26, seed: rng() * TAU,
+      });
+    }
+    return;
+  }
+
   if (layout === "gorge") {
     // Dos murallas horizontales que dejan un corredor central
     const wallYs = [H * 0.24, H * 0.76];
@@ -501,6 +535,7 @@ const isBossWave = (n) => n % 5 === 0;
 
 // Mutador por oleada: función pura de (semilla, oleada) => previsible y determinista
 function mutatorForWave(n) {
+  if (state.campaign && state.campaign.mutator) return D.MUTATORS[state.campaign.mutator];
   if (n < D.MUTATOR_MIN_WAVE || isBossWave(n)) return null;
   const rng = D.mulberry32(hash2(state.seed, n * 31 + 7));
   if (rng() > D.MUTATOR_CHANCE) return null;
@@ -586,7 +621,10 @@ function endWave() {
   if (state.waveLog.length > 40) state.waveLog.shift();
   if (state.tutStep === 4) finishTutorial();
 
-  if (state.wave >= WIN_WAVE && !state.endless) { victory(); return; }
+  if (state.wave >= winWave() && !state.endless) {
+    if (state.campaign) campaignVictory(); else victory();
+    return;
+  }
 
   nextWaveBtn.style.display = "block";
   waveProgressWrap.style.display = "none";
@@ -606,7 +644,8 @@ function makeEnemy(typeName, x, y, opts) {
   const d = diff();
   const mut = state.mutator;
   const rng = state.waveRng;
-  let hpMult = ECON.hpMultiplier(state.wave) * d.hp * ((opts && opts.hpMult) || 1);
+  let hpMult = ECON.hpMultiplier(state.wave) * d.hp * ((opts && opts.hpMult) || 1) *
+    ((state.campaign && state.campaign.hpMult) || 1);
   let speedMult = d.speed;
   if (mut) {
     if (mut.hp) hpMult *= mut.hp;
@@ -1180,6 +1219,7 @@ function saveGame() {
     daily: state.daily,
     shared: state.shared,
     layout: state.layout,
+    campaignId: state.campaign ? state.campaign.id : null,
     wave: state.wave,
     energy: state.energy,
     score: state.score,
@@ -1211,7 +1251,11 @@ function getSave() {
 function loadGame() {
   const d = getSave();
   if (!d) return false;
-  resetGame(d.difficulty, { seed: d.seed, daily: d.daily, shared: d.shared, layout: d.layout, skipTutorial: true });
+  resetGame(d.difficulty, {
+    seed: d.seed, daily: d.daily, shared: d.shared, layout: d.layout,
+    campaign: d.campaignId ? D.CAMPAIGN.find(l => l.id === d.campaignId) : null,
+    skipTutorial: true,
+  });
   state.wave = d.wave;
   state.energy = d.energy;
   state.score = d.score;
@@ -1800,7 +1844,7 @@ function finishRun(win) {
   if (win && state.layout === "gorge") unlockAchievement("strategist");
   meta.history.unshift({
     d: Date.now(), wave: state.wave, score: state.score,
-    diff: state.difficulty, win: !!win, daily: state.daily,
+    diff: state.difficulty, win: !!win, daily: state.daily, camp: !!state.campaign,
   });
   meta.history = meta.history.slice(0, 8);
   if (state.daily) {
@@ -1836,21 +1880,82 @@ function gameOver() {
   }, 900);
 }
 
-function victory() {
-  state.running = false;
-  unlockAchievement("legend");
-  const earned = finishRun(true);
+function showVictoryOverlay(earnedText) {
   nextWaveBtn.style.display = "none";
   wavePreview.style.display = "none";
   waveProgressWrap.style.display = "none";
   document.getElementById("victory-stats").innerHTML = buildStatsHTML();
-  document.getElementById("victory-frags").textContent = t("fragsEarned", earned);
+  document.getElementById("victory-frags").textContent = earnedText;
   document.getElementById("vic-chart-title").textContent = `${t("chartTitle")} — ▂ ${t("chartTaken")} · ─ ${t("chartDealt")}`;
   drawRunChart(document.getElementById("vic-chart"));
   buildDmgBars(document.getElementById("vic-bars"));
   document.getElementById("victory").classList.remove("hidden");
   sfx.achieve();
   burst(CX, CY, "#ffc94a", 80, 8);
+}
+
+function victory() {
+  state.running = false;
+  unlockAchievement("legend");
+  const earned = finishRun(true);
+  document.getElementById("victory-title").textContent = t("victoryT");
+  document.getElementById("victory-sub").textContent = t("victoryP");
+  document.getElementById("victory-stars-row").textContent = "";
+  document.getElementById("endless-btn").classList.remove("hidden");
+  document.getElementById("next-level-btn").classList.add("hidden");
+  showVictoryOverlay(t("fragsEarned", earned));
+}
+
+function campaignVictory() {
+  state.running = false;
+  const lvl = state.campaign;
+  const frac = clamp(state.coreHp / state.coreMaxHp, 0, 1);
+  const stars = frac >= D.STAR_THRESHOLDS.three ? 3 : frac >= D.STAR_THRESHOLDS.two ? 2 : 1;
+  const prev = meta.campaign[lvl.id] || 0;
+  let starFrags = 0;
+  if (stars > prev) {
+    starFrags = (stars - prev) * D.STAR_REWARD;
+    meta.campaign[lvl.id] = stars;
+  }
+  if (stars >= 3) unlockAchievement("perfectionist");
+  if (D.CAMPAIGN.every(l => (meta.campaign[l.id] || 0) >= 1)) unlockAchievement("conqueror");
+  const earned = finishRun(true) + starFrags;
+  meta.fragments += starFrags;
+  metaSave();
+  document.getElementById("victory-title").textContent = `${lvl.icon} ${t("levelClear")}`;
+  document.getElementById("victory-sub").textContent = tn(lvl.name);
+  document.getElementById("victory-stars-row").textContent = "★".repeat(stars) + "☆".repeat(3 - stars);
+  document.getElementById("endless-btn").classList.add("hidden");
+  const idx = D.CAMPAIGN.indexOf(lvl);
+  const hasNext = idx >= 0 && idx < D.CAMPAIGN.length - 1;
+  document.getElementById("next-level-btn").classList.toggle("hidden", !hasNext);
+  showVictoryOverlay(t("fragsEarned", earned));
+  updateHUD();
+}
+
+function startCampaignLevel(lvl) {
+  ensureAudio();
+  deleteSave();
+  document.getElementById("campaign").classList.add("hidden");
+  resetGame("normal", { campaign: lvl, seed: lvl.seed, layout: lvl.layout, skipTutorial: true });
+}
+
+function buildCampaignGrid() {
+  const grid = document.getElementById("campaign-grid");
+  grid.innerHTML = "";
+  D.CAMPAIGN.forEach((lvl, i) => {
+    const stars = meta.campaign[lvl.id] || 0;
+    const locked = i > 0 && (meta.campaign[D.CAMPAIGN[i - 1].id] || 0) < 1;
+    const card = document.createElement("div");
+    card.className = "camp-card" + (locked ? " locked" : "");
+    card.innerHTML = `<div class="cc-icon">${lvl.icon}</div>` +
+      `<div class="cc-name">${i + 1}. ${tn(lvl.name)}</div>` +
+      `<div class="cc-stars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</div>` +
+      `<div class="cc-desc">${locked ? t("lockedLevel") : tn(lvl.desc)}</div>` +
+      `<div class="cc-waves">${D.LAYOUTS[lvl.layout].icon} ${t("levelWaves", lvl.waves)}</div>`;
+    if (!locked) card.addEventListener("click", () => startCampaignLevel(lvl));
+    grid.appendChild(card);
+  });
 }
 
 // ---------- Render ----------
@@ -2548,7 +2653,7 @@ const toastBox = document.getElementById("toasts");
 // ---------- HUD ----------
 function updateHUD() {
   uiEnergy.textContent = state.energy;
-  uiWave.textContent = state.endless ? `${state.wave}∞` : `${state.wave}/${WIN_WAVE}`;
+  uiWave.textContent = state.endless ? `${state.wave}∞` : `${state.wave}/${winWave()}`;
   uiScore.textContent = state.score;
   uiFrags.textContent = meta.fragments;
   uiRelicsWrap.style.display = state.relics.length ? "flex" : "none";
@@ -2885,7 +2990,7 @@ document.getElementById("resume-btn").addEventListener("click", () => setPause(f
 document.getElementById("restart-btn").addEventListener("click", () => {
   document.getElementById("paused").classList.add("hidden");
   state.paused = false;
-  resetGame(state.difficulty, state.daily ? { seed: state.seed, daily: true } : undefined);
+  resetGame(state.difficulty, retryOpts());
 });
 document.getElementById("tomenu-btn").addEventListener("click", () => {
   document.getElementById("paused").classList.add("hidden");
@@ -3119,7 +3224,7 @@ function buildHistory() {
   for (const h of meta.history) {
     const d = new Date(h.d);
     const dt = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const badge = h.win ? "👑" : h.daily ? "📅" : "💀";
+    const badge = h.camp ? (h.win ? "🗻" : "💀") : h.win ? "👑" : h.daily ? "📅" : "💀";
     const row = document.createElement("div");
     row.className = "h-row";
     row.innerHTML = `<span>${badge} ${dt}</span><span>${t("waveN")} <b>${h.wave}</b></span><span><b>${h.score}</b> ⭐</span><span>${tn(D.DIFFICULTIES[h.diff].name)}</span>`;
@@ -3179,6 +3284,8 @@ function goToMenu() {
   document.getElementById("gameover").classList.add("hidden");
   document.getElementById("victory").classList.add("hidden");
   document.getElementById("draft").classList.add("hidden");
+  document.getElementById("campaign").classList.add("hidden");
+  state.campaign = null;
   showMenu();
 }
 
@@ -3192,6 +3299,7 @@ function resetGame(difficulty, opts) {
   state.endless = false;
   state.daily = !!opts.daily;
   state.shared = !!opts.shared;
+  state.campaign = opts.campaign || null;
   state.seed = opts.seed !== undefined ? opts.seed : ((Math.random() * 0x7fffffff) | 0);
   // El diario rota de mapa según la fecha; el resto usa la selección del menú
   state.layout = opts.layout || (opts.daily ? D.LAYOUT_ORDER[state.seed % D.LAYOUT_ORDER.length] : menuLayout);
@@ -3200,10 +3308,12 @@ function resetGame(difficulty, opts) {
   if (D.LAYOUT_ORDER.every(k => meta.layoutsPlayed[k])) unlockAchievement("cartographer");
   metaSave();
   if (state.shared) unlockAchievement("challenger");
-  state.energy = metaStartEnergy();
+  state.energy = state.campaign && state.campaign.startEnergy !== undefined
+    ? state.campaign.startEnergy : metaStartEnergy();
   state.score = 0;
   state.wave = 0;
-  state.coreMaxHp = metaCoreHp();
+  state.coreMaxHp = state.campaign && state.campaign.coreHp !== undefined
+    ? state.campaign.coreHp : metaCoreHp();
   state.coreHp = state.coreMaxHp;
   state.corePulse = 0;
   state.selectedType = "ruby";
@@ -3247,7 +3357,9 @@ function resetGame(difficulty, opts) {
   refreshToolbar();
   refreshAbilityBar();
   updateHUD();
-  if (state.shared) {
+  if (state.campaign) {
+    showBanner(`${state.campaign.icon} ${tn(state.campaign.name).toUpperCase()}`, tn(state.campaign.desc));
+  } else if (state.shared) {
     showBanner(t("challengeBanner"), t("challengeSub", runCode()));
   } else if (state.daily) {
     showBanner(t("dailyRun"), t("dailySub", state.seed));
@@ -3274,9 +3386,15 @@ document.getElementById("continue-btn").addEventListener("click", () => {
   if (!loadGame()) resetGame();
   else nextWaveBtn.style.display = "block";
 });
+function retryOpts() {
+  if (state.campaign) return { campaign: state.campaign, seed: state.campaign.seed, layout: state.campaign.layout, skipTutorial: true };
+  if (state.daily) return { daily: true, seed: state.seed };
+  if (state.shared) return { shared: true, seed: state.seed, layout: state.layout };
+  return undefined;
+}
 document.getElementById("retry-btn").addEventListener("click", () => {
   ensureAudio();
-  resetGame(state.difficulty, state.daily ? { daily: true, seed: state.seed } : undefined);
+  resetGame(state.difficulty, retryOpts());
 });
 document.getElementById("gomenu-btn").addEventListener("click", goToMenu);
 document.getElementById("endless-btn").addEventListener("click", () => {
@@ -3293,6 +3411,20 @@ document.getElementById("endless-btn").addEventListener("click", () => {
   updateHUD();
 });
 document.getElementById("vmenu-btn").addEventListener("click", goToMenu);
+document.getElementById("campaign-btn").addEventListener("click", () => {
+  buildCampaignGrid();
+  document.getElementById("campaign").classList.remove("hidden");
+});
+document.getElementById("campaign-close").addEventListener("click", () => {
+  document.getElementById("campaign").classList.add("hidden");
+});
+document.getElementById("next-level-btn").addEventListener("click", () => {
+  const idx = D.CAMPAIGN.indexOf(state.campaign);
+  const next = D.CAMPAIGN[idx + 1];
+  document.getElementById("victory").classList.add("hidden");
+  if (next) startCampaignLevel(next);
+  else goToMenu();
+});
 
 // ---------- Códigos de reto ----------
 // GEO-<semilla base36>-<dificultad><mapa>: reproduce terreno, oleadas,
@@ -3351,7 +3483,7 @@ function saveResultCard() {
   const lay = D.LAYOUTS[state.layout];
   g.fillStyle = "#e8e4ff";
   g.font = "16px 'Segoe UI', sans-serif";
-  g.fillText(`${t("waveN")} ${state.wave}${state.endless ? "∞" : "/" + WIN_WAVE} · ${tn(diff().name)} · ${lay.icon} ${tn(lay.name)}${state.daily ? " · 📅" : ""}`, 32, 184);
+  g.fillText(`${t("waveN")} ${state.wave}${state.endless ? "∞" : "/" + winWave()} · ${tn(diff().name)} · ${lay.icon} ${tn(lay.name)}${state.daily ? " · 📅" : ""}${state.campaign ? " · 🗻 " + tn(state.campaign.name) : ""}`, 32, 184);
   const s = state.stats;
   g.fillStyle = "#9a92c9";
   g.font = "13px 'Segoe UI', sans-serif";

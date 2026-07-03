@@ -327,6 +327,27 @@
   .draft-card .d-name { font-size: 14.5px; font-weight: 800; margin-top: 8px; }
   .draft-card .d-desc { font-size: 11.5px; color: var(--dim); margin-top: 6px; line-height: 1.45; }
 
+  /* ---------- Campaña ---------- */
+  #campaign-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px; margin-top: 16px; max-width: 700px; width: 100%;
+  }
+  .camp-card {
+    padding: 14px 12px; cursor: pointer; text-align: center;
+    background: linear-gradient(160deg, rgba(140,120,255,.1), rgba(18,16,34,.9));
+    border: 2px solid var(--border); border-radius: 14px;
+    transition: transform .15s ease, border-color .15s ease;
+  }
+  .camp-card:hover { transform: translateY(-4px); border-color: var(--gold); }
+  .camp-card.locked { opacity: .38; cursor: not-allowed; filter: grayscale(.6); }
+  .camp-card.locked:hover { transform: none; border-color: var(--border); }
+  .camp-card .cc-icon { font-size: 30px; }
+  .camp-card .cc-name { font-size: 13.5px; font-weight: 800; margin-top: 6px; }
+  .camp-card .cc-stars { font-size: 15px; color: var(--gold); letter-spacing: 2px; margin-top: 3px; }
+  .camp-card .cc-desc { font-size: 11px; color: var(--dim); margin-top: 5px; line-height: 1.4; min-height: 30px; }
+  .camp-card .cc-waves { font-size: 10.5px; color: var(--accent); margin-top: 4px; font-weight: 700; }
+  #victory-stars-row { font-size: 42px; color: var(--gold); letter-spacing: 8px; text-shadow: 0 0 24px rgba(255,201,74,.6); margin: 4px 0; }
+
   /* ---------- Ajustes ---------- */
   #settings .set-box { width: 340px; max-width: 92vw; text-align: left; margin-top: 6px; }
   .set-row {
@@ -423,6 +444,7 @@
         <button class="big-btn gold hidden" id="continue-btn" data-i18n="cont"></button>
       </div>
       <div class="btn-row">
+        <button class="big-btn gold" id="campaign-btn" data-i18n="campaignBtn"></button>
         <button class="big-btn secondary" id="daily-btn" data-i18n="daily"></button>
         <button class="big-btn secondary" id="code-btn" data-i18n="playCode"></button>
         <button class="big-btn secondary" id="settings-btn" data-i18n="settings"></button>
@@ -478,6 +500,14 @@
   <div id="draft-cards"></div>
 </div>
 
+<!-- ================= CAMPAÑA ================= -->
+<div class="overlay hidden" id="campaign">
+  <h2 style="font-size:28px;" data-i18n="campaignTitle"></h2>
+  <p data-i18n="campaignSub"></p>
+  <div id="campaign-grid"></div>
+  <button class="big-btn secondary" id="campaign-close" data-i18n="back"></button>
+</div>
+
 <!-- ================= DERROTA ================= -->
 <div class="overlay hidden" id="gameover">
   <h2 data-i18n="defeat"></h2>
@@ -495,14 +525,16 @@
 
 <!-- ================= VICTORIA ================= -->
 <div class="overlay hidden" id="victory">
-  <h2 data-i18n="victoryT"></h2>
-  <p data-i18n="victoryP"></p>
+  <h2 id="victory-title" data-i18n="victoryT"></h2>
+  <div id="victory-stars-row"></div>
+  <p id="victory-sub" data-i18n="victoryP"></p>
   <div class="stats-grid" id="victory-stats"></div>
   <div class="chart-box"><div class="c-title" id="vic-chart-title"></div><canvas id="vic-chart" width="540" height="130"></canvas></div>
   <div class="dmg-bars" id="vic-bars"></div>
   <div class="frags-earned" id="victory-frags"></div>
   <div class="btn-row">
     <button class="big-btn gold" id="endless-btn" data-i18n="endless"></button>
+    <button class="big-btn gold hidden" id="next-level-btn" data-i18n="nextLevel"></button>
     <button class="big-btn secondary" id="vic-card-btn" data-i18n="saveCard"></button>
     <button class="big-btn secondary" id="vic-code-btn" data-i18n="copyCode"></button>
     <button class="big-btn secondary" id="vmenu-btn" data-i18n="menu"></button>

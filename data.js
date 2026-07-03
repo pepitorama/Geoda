@@ -233,8 +233,65 @@
       name: { es: "Vacío", en: "Void" },
       desc: { es: "Sin rocas ni vetas: campo abierto, sin ayudas. +10% puntuación.", en: "No rocks, no veins: open field, no help. +10% score." },
     },
+    ring: {
+      id: "ring", icon: "⭕", sides: [0, 1, 2, 3], score: 1.1,
+      name: { es: "Anillo", en: "Ring" },
+      desc: { es: "Una muralla circular con tres brechas rodea el núcleo.", en: "A circular wall with three breaches surrounds the core." },
+    },
   };
+  // El Anillo es exclusivo de la campaña: no aparece en el selector
   const LAYOUT_ORDER = ["cavern", "gorge", "archipelago", "void"];
+
+  // ---------- Campaña ----------
+  const CAMPAIGN = [
+    {
+      id: "c1", icon: "🌅", waves: 8, layout: "cavern", seed: 1101,
+      name: { es: "El despertar", en: "The Awakening" },
+      desc: { es: "Las primeras sombras ponen a prueba la caverna.", en: "The first shadows test the cavern." },
+    },
+    {
+      id: "c2", icon: "🚫", waves: 10, layout: "cavern", seed: 2202, banned: ["sapphire"],
+      name: { es: "Sin hielo", en: "No Ice" },
+      desc: { es: "El Zafiro está prohibido: nada de ralentizar.", en: "Sapphire is banned: no slowing allowed." },
+    },
+    {
+      id: "c3", icon: "🏔️", waves: 10, layout: "gorge", seed: 3303,
+      name: { es: "El desfiladero", en: "The Gorge" },
+      desc: { es: "Canaliza la marea por el corredor de roca.", en: "Funnel the tide through the rock corridor." },
+    },
+    {
+      id: "c4", icon: "💸", waves: 10, layout: "archipelago", seed: 4404, startEnergy: 80,
+      name: { es: "Presupuesto ajustado", en: "Tight Budget" },
+      desc: { es: "Empiezas con solo 80 💎 entre las islas de roca.", en: "You start with just 80 💎 among the rock islands." },
+    },
+    {
+      id: "c5", icon: "🫀", waves: 12, layout: "cavern", seed: 5505, coreHp: 40,
+      name: { es: "Núcleo frágil", en: "Fragile Core" },
+      desc: { es: "El núcleo late con solo 40 de vida. Que nada lo toque.", en: "The core beats with only 40 HP. Let nothing touch it." },
+    },
+    {
+      id: "c6", icon: "🌫️", waves: 12, layout: "void", seed: 6606, mutator: "fog",
+      name: { es: "Niebla eterna", en: "Eternal Fog" },
+      desc: { es: "Niebla permanente: -20% de alcance en campo abierto.", en: "Permanent fog: -20% range in an open field." },
+    },
+    {
+      id: "c7", icon: "⭕", waves: 12, layout: "ring", seed: 7707,
+      name: { es: "El anillo", en: "The Ring" },
+      desc: { es: "Defiende las tres brechas de la muralla circular.", en: "Defend the three breaches in the circular wall." },
+    },
+    {
+      id: "c8", icon: "💨", waves: 13, layout: "gorge", seed: 8808, mutator: "frenzy",
+      name: { es: "Marea veloz", en: "Swift Tide" },
+      desc: { es: "Frenesí permanente: +25% de velocidad enemiga.", en: "Permanent frenzy: +25% enemy speed." },
+    },
+    {
+      id: "c9", icon: "🕳️", waves: 15, layout: "ring", seed: 9909, coreHp: 80, hpMult: 1.15,
+      name: { es: "El corazón del abismo", en: "The Heart of the Abyss" },
+      desc: { es: "Quince oleadas endurecidas y un mega-jefe final.", en: "Fifteen hardened waves and a final mega-boss." },
+    },
+  ];
+  const STAR_THRESHOLDS = { two: 0.6, three: 0.95 };
+  const STAR_REWARD = 15;
 
   // ---------- Habilidades ----------
   const ABILITIES = [
@@ -272,6 +329,8 @@
     { id: "strategist", icon: "🧠", name: { es: "Estratega", en: "Strategist" }, desc: { es: "Gana en el Desfiladero", en: "Win on the Gorge" }, frag: 25 },
     { id: "cartographer", icon: "🗺️", name: { es: "Cartógrafo", en: "Cartographer" }, desc: { es: "Juega en los 4 mapas", en: "Play all 4 maps" }, frag: 20 },
     { id: "challenger", icon: "🎲", name: { es: "Retador", en: "Challenger" }, desc: { es: "Juega un código compartido", en: "Play a shared code" }, frag: 10 },
+    { id: "conqueror", icon: "🗻", name: { es: "Conquistador", en: "Conqueror" }, desc: { es: "Completa los 9 niveles de la campaña", en: "Complete all 9 campaign levels" }, frag: 60 },
+    { id: "perfectionist", icon: "🌟", name: { es: "Perfeccionista", en: "Perfectionist" }, desc: { es: "Consigue 3 estrellas en un nivel", en: "Earn 3 stars on a level" }, frag: 20 },
   ];
 
   // ---------- Economía y progresión ----------
@@ -396,6 +455,10 @@
       saveCard: "🖼 Guardar tarjeta", recordLbl: "Récord",
       auraLabel: "Aura", minRangeLabel: "Alcance mín.",
       challengeBanner: "🎲 PARTIDA RETO", challengeSub: (s) => `Código ${s} — misma caverna, mismas oleadas`,
+      campaignBtn: "🗻 Campaña", campaignTitle: "🗻 Campaña de la Caverna",
+      campaignSub: "Niveles con reglas propias. ★ completar · ★★ núcleo ≥60% · ★★★ núcleo ≥95%",
+      levelWaves: (n) => `${n} oleadas`, levelClear: "¡NIVEL SUPERADO!",
+      nextLevel: "Siguiente nivel ▶", lockedLevel: "Supera el nivel anterior",
       helpBody: [
         "<h3>Controles</h3>",
         "<kbd>Clic</kbd> colocar torre / mejorar / evolucionar &nbsp; <kbd>Clic dcho.</kbd> vender (60%) &nbsp; <kbd>1-6</kbd> elegir cristal &nbsp; <kbd>T</kbd> prioridad de la torre bajo el cursor<br>",
@@ -476,6 +539,10 @@
       saveCard: "🖼 Save card", recordLbl: "Record",
       auraLabel: "Aura", minRangeLabel: "Min range",
       challengeBanner: "🎲 CHALLENGE RUN", challengeSub: (s) => `Code ${s} — same cavern, same waves`,
+      campaignBtn: "🗻 Campaign", campaignTitle: "🗻 Cavern Campaign",
+      campaignSub: "Levels with their own rules. ★ complete · ★★ core ≥60% · ★★★ core ≥95%",
+      levelWaves: (n) => `${n} waves`, levelClear: "LEVEL CLEARED!",
+      nextLevel: "Next level ▶", lockedLevel: "Beat the previous level",
       helpBody: [
         "<h3>Controls</h3>",
         "<kbd>Click</kbd> place / upgrade / evolve &nbsp; <kbd>Right-click</kbd> sell (60%) &nbsp; <kbd>1-6</kbd> pick crystal &nbsp; <kbd>T</kbd> targeting priority under cursor<br>",
@@ -503,6 +570,7 @@
     BOSS_KINDS, BOSS_ROTATION, bossKindForWave,
     ELITE_AFFIXES, MUTATORS, MUTATOR_CHANCE, MUTATOR_MIN_WAVE,
     RELICS, RELIC_INTERVAL, LAYOUTS, LAYOUT_ORDER,
+    CAMPAIGN, STAR_THRESHOLDS, STAR_REWARD,
     ABILITIES, SHOP, shopCost, ACHIEVEMENTS,
     ECON, waveComposition, STRINGS,
   };

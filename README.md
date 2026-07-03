@@ -1,11 +1,24 @@
-# 💎 GEODA — Defiende el Núcleo · v4 «Edición Prismática»
+# 💎 GEODA — Defiende el Núcleo · v5 «Edición Génesis»
 
 Un juego de **defiende tu base** (tower defense) hecho en HTML5 Canvas puro.
 Sin dependencias, sin build: abre `index.html` en el navegador y juega.
 En español e inglés, en escritorio y táctil. Instalable como **PWA** con
 juego sin conexión cuando se sirve por HTTP.
 
-## 🆕 Novedades de la v4
+## 🆕 Novedades de la v5
+
+- **🗻 Campaña de la Caverna**: 9 niveles diseñados a mano con reglas
+  propias — torres prohibidas, presupuesto ajustado, núcleo frágil, niebla
+  o frenesí permanentes, la muralla circular de **El Anillo** y el asalto
+  final de 15 oleadas de *El corazón del abismo*. Desbloqueo secuencial.
+- **Sistema de estrellas**: ★ completar · ★★ núcleo ≥60% · ★★★ núcleo
+  ≥95%, con fragmentos por cada estrella nueva y botón «Siguiente nivel».
+- **Mapa Anillo** exclusivo de campaña: muralla circular con tres brechas
+  y vetas de poder junto a cada una.
+- **2 logros nuevos** (Conquistador y Perfeccionista — 18 en total) y la
+  campaña se integra con guardado automático, historial y tarjeta.
+
+## Novedades de la v4
 
 - **Torres especiales desbloqueables con fragmentos**: el **🫧 Ópalo**
   (soporte: su aura da +15% daño y +8% cadencia; evoluciona a Faro o
