@@ -107,6 +107,19 @@ compite en el desafío diario con la misma semilla que todo el mundo.
   oleada y desglose de daño por tipo de torre, más historial de las últimas
   8 partidas en el menú.
 
+## ▶️ Cómo ejecutarlo en tu ordenador
+
+1. Descarga el repositorio (botón verde **Code → Download ZIP**) y **extrae el
+   ZIP** a una carpeta normal (p. ej. el Escritorio) — no lo abras desde dentro
+   del propio ZIP.
+2. **Windows**: doble clic en **`Jugar-GEODA.bat`**. **Mac/Linux**: ejecuta
+   `bash jugar.sh`. El servidor arranca y el navegador se abre solo en
+   `http://localhost:8000`.
+3. Para salir, cierra la ventana negra (o `Ctrl+C`).
+
+> ¿Sin Python? También puedes **hacer doble clic en `index.html`** y jugar
+> directamente (la única diferencia es que no se instala como app offline).
+
 ## 🎮 Controles
 
 `Clic` construir/mejorar/evolucionar · `Clic dcho.` vender · `1-6` cristal ·
