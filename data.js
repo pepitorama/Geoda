@@ -67,8 +67,21 @@
       cost: 200, dmg: 26, range: 175, beam: true,
       desc: { es: "Láser continuo que se intensifica.", en: "Continuous ramping laser." }, unlockWave: 6,
     },
+    // Torres especiales: se compran una vez con fragmentos en el menú
+    opal: {
+      name: { es: "Ópalo", en: "Opal" }, gem: "🫧", color: "#ff9ff5", glow: "rgba(255,159,245,",
+      cost: 120, range: 120, support: true, auraDmg: 0.15, auraRate: 0.08,
+      desc: { es: "No ataca: su aura da +15% daño y +8% cadencia a las torres vecinas.", en: "Doesn't attack: its aura grants +15% damage and +8% fire rate to nearby towers." },
+      unlockWave: 2, metaUnlock: 100,
+    },
+    obsidian: {
+      name: { es: "Obsidiana", en: "Obsidian" }, gem: "⚫", color: "#9d8fc4", glow: "rgba(157,143,196,",
+      cost: 180, dmg: 55, rate: 2.4, range: 320, minRange: 110, splash: 80, mortar: true,
+      desc: { es: "Mortero de largo alcance con gran explosión. No dispara de cerca.", en: "Long-range mortar with a huge blast. Can't fire up close." },
+      unlockWave: 5, metaUnlock: 150,
+    },
   };
-  const TOWER_ORDER = ["ruby", "sapphire", "emerald", "amethyst", "amber", "diamond"];
+  const TOWER_ORDER = ["ruby", "sapphire", "emerald", "amethyst", "amber", "diamond", "opal", "obsidian"];
 
   // ---------- Evoluciones (nivel máximo → especialización) ----------
   const EVOLUTION_COST = 250;
@@ -96,6 +109,14 @@
     diamond: [
       { id: "prism", icon: "🔱", name: { es: "Prisma", en: "Prism" }, desc: { es: "El láser se refracta a 2 objetivos extra (50% del daño).", en: "The laser refracts to 2 extra targets (50% damage)." } },
       { id: "focus", icon: "🎇", name: { es: "Foco", en: "Focus" }, desc: { es: "La intensificación llega hasta ×4 de daño.", en: "Ramps all the way to ×4 damage." } },
+    ],
+    opal: [
+      { id: "beacon", icon: "🗼", name: { es: "Faro", en: "Beacon" }, desc: { es: "Su aura también otorga +15% de alcance.", en: "Its aura also grants +15% range." } },
+      { id: "prospector", icon: "⛏️", name: { es: "Prospector", en: "Prospector" }, desc: { es: "Extrae 1 💎 cada 2 segundos.", en: "Mines 1 💎 every 2 seconds." } },
+    ],
+    obsidian: [
+      { id: "magma", icon: "🌋", name: { es: "Magma", en: "Magma" }, desc: { es: "La explosión deja un charco ardiente 3 s (quema a quien lo pisa).", en: "The blast leaves a burning pool for 3 s." } },
+      { id: "seismic", icon: "🌊", name: { es: "Sísmica", en: "Seismic" }, desc: { es: "La explosión ralentiza un 40% durante 2 s.", en: "The blast slows by 40% for 2 s." } },
     ],
   };
 
@@ -190,6 +211,31 @@
   };
   const RELIC_INTERVAL = 3;
 
+  // ---------- Disposiciones de mapa ----------
+  const LAYOUTS = {
+    cavern: {
+      id: "cavern", icon: "🕳️", sides: [0, 1, 2, 3], score: 1,
+      name: { es: "Caverna", en: "Cavern" },
+      desc: { es: "Rocas dispersas y vetas de poder. El clásico.", en: "Scattered rocks and power veins. The classic." },
+    },
+    gorge: {
+      id: "gorge", icon: "🏔️", sides: [1, 3], score: 1.15,
+      name: { es: "Desfiladero", en: "Gorge" },
+      desc: { es: "Murallas de roca canalizan a las sombras por un corredor. Solo entran por los flancos. +15% puntuación.", en: "Rock walls funnel the shadows through a corridor. They only enter from the flanks. +15% score." },
+    },
+    archipelago: {
+      id: "archipelago", icon: "🏝️", sides: [0, 1, 2, 3], score: 1.05,
+      name: { es: "Archipiélago", en: "Archipelago" },
+      desc: { es: "Muchas rocas pequeñas, poco sitio para construir. +5% puntuación.", en: "Many small rocks, little room to build. +5% score." },
+    },
+    void: {
+      id: "void", icon: "🌌", sides: [0, 1, 2, 3], score: 1.1,
+      name: { es: "Vacío", en: "Void" },
+      desc: { es: "Sin rocas ni vetas: campo abierto, sin ayudas. +10% puntuación.", en: "No rocks, no veins: open field, no help. +10% score." },
+    },
+  };
+  const LAYOUT_ORDER = ["cavern", "gorge", "archipelago", "void"];
+
   // ---------- Habilidades ----------
   const ABILITIES = [
     { id: "pulse", icon: "⚡", name: { es: "Pulso", en: "Pulse" }, key: "ESP", keyEn: "SPC", code: "Space", cd: 25, unlock: 0, desc: { es: "Onda que daña y empuja alrededor del núcleo.", en: "Wave that damages and knocks back around the core." } },
@@ -222,6 +268,10 @@
     { id: "gems", icon: "💠", name: { es: "Coleccionista", en: "Collector" }, desc: { es: "Recoge 20 gemas en una partida", en: "Collect 20 gems in one run" }, frag: 10 },
     { id: "crit", icon: "⚡", name: { es: "Golpe maestro", en: "Master Strike" }, desc: { es: "Asesta 50 críticos en una partida", en: "Land 50 crits in one run" }, frag: 10 },
     { id: "kills", icon: "🌌", name: { es: "Demoledor", en: "Demolisher" }, desc: { es: "1000 bajas acumuladas en total", en: "1000 total kills" }, frag: 30 },
+    { id: "prospect", icon: "🔓", name: { es: "Prospector", en: "Prospector" }, desc: { es: "Desbloquea una torre especial", en: "Unlock a special tower" }, frag: 15 },
+    { id: "strategist", icon: "🧠", name: { es: "Estratega", en: "Strategist" }, desc: { es: "Gana en el Desfiladero", en: "Win on the Gorge" }, frag: 25 },
+    { id: "cartographer", icon: "🗺️", name: { es: "Cartógrafo", en: "Cartographer" }, desc: { es: "Juega en los 4 mapas", en: "Play all 4 maps" }, frag: 20 },
+    { id: "challenger", icon: "🎲", name: { es: "Retador", en: "Challenger" }, desc: { es: "Juega un código compartido", en: "Play a shared code" }, frag: 10 },
   ];
 
   // ---------- Economía y progresión ----------
@@ -339,6 +389,13 @@
       tut4: "⚡ Si te ves apurado usa el <b>Pulso (ESPACIO)</b>. Pasa el cursor por las gemas 💎 para recogerlas.",
       tutDone: "¡Tutorial completado! La caverna es tuya.",
       synergy: "Sinergias", empowered: "⛰ Potenciada por veta (+25% daño)",
+      mapTitle: "Mapa", unlockTowers: "🔓 Torres especiales",
+      unlockFor: (c) => `Desbloquear ${c} 💠`, unlockedLbl: "✓ Desbloqueada",
+      playCode: "🎲 Jugar código", codePrompt: "Pega el código de partida (GEO-…):", codeBad: "Código no válido",
+      runCode: "Código de esta partida (compártelo para retar):", copyCode: "🎲 Código de reto",
+      saveCard: "🖼 Guardar tarjeta", recordLbl: "Récord",
+      auraLabel: "Aura", minRangeLabel: "Alcance mín.",
+      challengeBanner: "🎲 PARTIDA RETO", challengeSub: (s) => `Código ${s} — misma caverna, mismas oleadas`,
       helpBody: [
         "<h3>Controles</h3>",
         "<kbd>Clic</kbd> colocar torre / mejorar / evolucionar &nbsp; <kbd>Clic dcho.</kbd> vender (60%) &nbsp; <kbd>1-6</kbd> elegir cristal &nbsp; <kbd>T</kbd> prioridad de la torre bajo el cursor<br>",
@@ -412,6 +469,13 @@
       tut4: "⚡ In trouble? Use the <b>Pulse (SPACE)</b>. Hover over gems 💎 to collect them.",
       tutDone: "Tutorial complete! The cavern is yours.",
       synergy: "Synergies", empowered: "⛰ Empowered by vein (+25% damage)",
+      mapTitle: "Map", unlockTowers: "🔓 Special towers",
+      unlockFor: (c) => `Unlock ${c} 💠`, unlockedLbl: "✓ Unlocked",
+      playCode: "🎲 Play code", codePrompt: "Paste a run code (GEO-…):", codeBad: "Invalid code",
+      runCode: "This run's code (share it to challenge):", copyCode: "🎲 Challenge code",
+      saveCard: "🖼 Save card", recordLbl: "Record",
+      auraLabel: "Aura", minRangeLabel: "Min range",
+      challengeBanner: "🎲 CHALLENGE RUN", challengeSub: (s) => `Code ${s} — same cavern, same waves`,
       helpBody: [
         "<h3>Controls</h3>",
         "<kbd>Click</kbd> place / upgrade / evolve &nbsp; <kbd>Right-click</kbd> sell (60%) &nbsp; <kbd>1-6</kbd> pick crystal &nbsp; <kbd>T</kbd> targeting priority under cursor<br>",
@@ -438,7 +502,7 @@
     ENEMY_TYPES, ENEMY_ICONS, ENEMY_COLORS_CB,
     BOSS_KINDS, BOSS_ROTATION, bossKindForWave,
     ELITE_AFFIXES, MUTATORS, MUTATOR_CHANCE, MUTATOR_MIN_WAVE,
-    RELICS, RELIC_INTERVAL,
+    RELICS, RELIC_INTERVAL, LAYOUTS, LAYOUT_ORDER,
     ABILITIES, SHOP, shopCost, ACHIEVEMENTS,
     ECON, waveComposition, STRINGS,
   };

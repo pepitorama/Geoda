@@ -1,8 +1,25 @@
-# 💎 GEODA — Defiende el Núcleo · v3 «Edición Abisal»
+# 💎 GEODA — Defiende el Núcleo · v4 «Edición Prismática»
 
 Un juego de **defiende tu base** (tower defense) hecho en HTML5 Canvas puro.
 Sin dependencias, sin build: abre `index.html` en el navegador y juega.
-En español e inglés, en escritorio y táctil.
+En español e inglés, en escritorio y táctil. Instalable como **PWA** con
+juego sin conexión cuando se sirve por HTTP.
+
+## 🆕 Novedades de la v4
+
+- **Torres especiales desbloqueables con fragmentos**: el **🫧 Ópalo**
+  (soporte: su aura da +15% daño y +8% cadencia; evoluciona a Faro o
+  Prospector) y la **⚫ Obsidiana** (mortero balístico de gran explosión con
+  alcance mínimo; evoluciona a Magma —charcos ardientes— o Sísmica).
+- **4 mapas**: Caverna, **Desfiladero** (murallas que canalizan a las
+  sombras por un corredor, +15% puntuación), **Archipiélago** (apenas hay
+  sitio para construir) y **Vacío** (campo abierto sin ayudas).
+- **Códigos de reto**: cada partida tiene un código `GEO-…` que reproduce
+  su semilla, mapa y dificultad. Compártelo y compite con la misma caverna.
+- **Tarjeta de resultado**: descarga un PNG con tu puntuación, gráfico de
+  la partida y el código de reto.
+- **Récords por dificultad × mapa** y 4 logros nuevos (16 en total).
+- **PWA**: manifest + service worker con cache-first para jugar offline.
 
 En lo profundo de la caverna late el último **núcleo de geoda**. Construye
 cristales, evoluciónalos, elige reliquias y sobrevive **25 oleadas** — o
@@ -16,6 +33,7 @@ compite en el desafío diario con la misma semilla que todo el mundo.
 | `game.js` | Motor: simulación, render, UI, audio, guardado |
 | `index.html` | Presentación y estilos |
 | `tools/balance-sim.js` | Simulador de balance headless (`node tools/balance-sim.js [dificultad] [oleadas]`) |
+| `manifest.webmanifest` + `sw.js` + `icon.svg` | PWA instalable con juego sin conexión |
 
 ## 🌊 Profundidad de juego
 

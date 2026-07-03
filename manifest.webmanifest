@@ -1,0 +1,13 @@
+{
+  "name": "GEODA — Defiende el Núcleo",
+  "short_name": "GEODA",
+  "description": "Tower defense de cristales en la caverna. Sin conexión, sin dependencias.",
+  "start_url": ".",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b0a14",
+  "theme_color": "#0b0a14",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

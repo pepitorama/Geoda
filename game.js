@@ -20,7 +20,7 @@ const hash2 = (a, b) => ((Math.imul(a, 2654435761) ^ Math.imul(b + 1, 97531)) >>
 
 const WIN_WAVE = ECON.winWave;
 const MAX_LEVEL = ECON.maxLevel;
-const SAVE_KEY = "geoda_save_v3";
+const SAVE_KEY = "geoda_save_v4";
 const META_KEY = "geoda_meta_v2"; // se conserva la clave: los campos nuevos se fusionan
 const pointerCoarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
 
@@ -38,6 +38,9 @@ function loadMeta() {
     history: [],
     daily: null,           // { date: "2026-07-03", best: 1234 }
     tutorialDone: false,
+    unlocked: { opal: false, obsidian: false },
+    records: {},           // "normal|gorge" -> mejor puntuación
+    layoutsPlayed: {},
   };
   try {
     const raw = localStorage.getItem(META_KEY);
@@ -49,6 +52,9 @@ function loadMeta() {
         settings: { ...def.settings, ...(m.settings || {}) },
         ach: m.ach || {},
         history: Array.isArray(m.history) ? m.history : [],
+        unlocked: { ...def.unlocked, ...(m.unlocked || {}) },
+        records: m.records || {},
+        layoutsPlayed: m.layoutsPlayed || {},
       };
     }
   } catch (e) { /* meta corrupta: empezar de cero */ }
@@ -72,9 +78,14 @@ function t(key, ...args) {
 function tn(obj) { return obj && typeof obj === "object" ? (obj[L()] || obj.es) : obj; } // nombres de data.js
 
 // ---------- Estado ----------
+// Una torre está disponible si no requiere desbloqueo o ya se compró
+const towerUnlocked = (type) => !D.TOWER_TYPES[type].metaUnlock || meta.unlocked[type];
+const visibleTowers = () => D.TOWER_ORDER.filter(towerUnlocked);
+
 const state = {
   running: false, gameOver: false, paused: false, drafting: false,
-  endless: false, daily: false, seed: 0,
+  endless: false, daily: false, shared: false, seed: 0,
+  layout: "cavern",
   difficulty: "normal",
   energy: 0, score: 0, wave: 0,
   coreHp: 100, coreMaxHp: 100, corePulse: 0,
@@ -87,7 +98,7 @@ const state = {
   relics: [],
   rocks: [], spots: [],
   towers: [], enemies: [], projectiles: [], particles: [], gems: [],
-  beams: [], texts: [], shockwaves: [], timers: [],
+  beams: [], texts: [], shockwaves: [], timers: [], pools: [],
   waveLog: [],
   combo: 0, comboTimer: 0,
   time: 0, shake: 0,
@@ -329,13 +340,11 @@ function addTimer(delay, fn) { state.timers.push({ t: state.time + delay, fn });
 function genTerrain() {
   const rng = D.mulberry32(hash2(state.seed, 777));
   const rr = (a, b) => a + rng() * (b - a);
+  const layout = state.layout;
   state.rocks = [];
-  const nRocks = 4 + Math.floor(rng() * 4);
-  for (let tries = 0; tries < 80 && state.rocks.length < nRocks; tries++) {
-    const r = rr(26, 58);
-    const x = rr(70, W - 70), y = rr(90, H - 150);
-    if (dist2(x, y, CX, CY) < (200 + r) * (200 + r)) continue;
-    if (state.rocks.some(o => dist2(x, y, o.x, o.y) < (r + o.r + 70) * (r + o.r + 70))) continue;
+  state.spots = [];
+
+  const addRock = (x, y, r) => {
     const pts = [];
     const n = 7 + Math.floor(rng() * 4);
     for (let i = 0; i < n; i++) {
@@ -343,9 +352,44 @@ function genTerrain() {
       pts.push([Math.cos(a) * r * rr(0.75, 1.15), Math.sin(a) * r * rr(0.75, 1.15)]);
     }
     state.rocks.push({ x, y, r, pts, hue: 230 + Math.floor(rng() * 60) });
+  };
+
+  if (layout === "void") {
+    return; // campo abierto: sin rocas ni vetas
   }
-  state.spots = [];
-  const nSpots = 3 + Math.floor(rng() * 3);
+
+  if (layout === "gorge") {
+    // Dos murallas horizontales que dejan un corredor central
+    const wallYs = [H * 0.24, H * 0.76];
+    for (const wy of wallYs) {
+      let x = rr(30, 80);
+      while (x < W - 60) {
+        const r = rr(30, 48);
+        if (Math.abs(x - CX) > 190 + r) addRock(x, wy + rr(-22, 22), r);
+        x += r * 2 + rr(6, 26);
+      }
+    }
+    // Vetas dentro del corredor
+    for (let tries = 0; tries < 60 && state.spots.length < 4; tries++) {
+      const x = rr(90, W - 90), y = rr(H * 0.36, H * 0.64);
+      if (dist2(x, y, CX, CY) < 150 * 150) continue;
+      if (state.spots.some(o => dist2(x, y, o.x, o.y) < 130 * 130)) continue;
+      state.spots.push({ x, y, r: 26, seed: rng() * TAU });
+    }
+    return;
+  }
+
+  const nRocks = layout === "archipelago" ? 12 + Math.floor(rng() * 4) : 4 + Math.floor(rng() * 4);
+  const rockSize = layout === "archipelago" ? [20, 38] : [26, 58];
+  const rockGap = layout === "archipelago" ? 34 : 70;
+  for (let tries = 0; tries < 160 && state.rocks.length < nRocks; tries++) {
+    const r = rr(rockSize[0], rockSize[1]);
+    const x = rr(70, W - 70), y = rr(90, H - 150);
+    if (dist2(x, y, CX, CY) < (200 + r) * (200 + r)) continue;
+    if (state.rocks.some(o => dist2(x, y, o.x, o.y) < (r + o.r + rockGap) * (r + o.r + rockGap))) continue;
+    addRock(x, y, r);
+  }
+  const nSpots = layout === "archipelago" ? 2 : 3 + Math.floor(rng() * 3);
   for (let tries = 0; tries < 80 && state.spots.length < nSpots; tries++) {
     const x = rr(80, W - 80), y = rr(100, H - 160);
     if (dist2(x, y, CX, CY) < 150 * 150) continue;
@@ -614,7 +658,8 @@ function makeEnemy(typeName, x, y, opts) {
 
 function spawnEnemy(typeName) {
   const rng = state.waveRng;
-  const side = Math.floor(rng() * 4);
+  const sides = D.LAYOUTS[state.layout].sides;
+  const side = sides[Math.floor(rng() * sides.length)];
   const m = 40;
   let x, y;
   if (side === 0) { x = rng() * W; y = -m; }
@@ -670,12 +715,36 @@ function towerStats(tw) {
   const base = D.TOWER_TYPES[tw.type];
   const lv = tw.level;
   const syn = synergyFor(tw);
-  let dmg = base.dmg * (1 + ECON.levelDmg * lv) * vetMult(tw) * metaDmgMult() * relicDmgMult() * syn.dmg;
+  let dmg = (base.dmg || 0) * (1 + ECON.levelDmg * lv) * vetMult(tw) * metaDmgMult() * relicDmgMult() * syn.dmg;
   if (tw.empowered) dmg *= ECON.powerSpotBonus;
   let range = base.range * (1 + ECON.levelRange * lv) * relicRangeMult() * syn.range;
   if (tw.evo === "ballista") range *= 1.3;
   if (state.mutator && state.mutator.towerRange) range *= state.mutator.towerRange;
-  const rate = (base.rate || 1) * Math.pow(ECON.levelRate, lv) * syn.rate;
+  let rate = (base.rate || 1) * Math.pow(ECON.levelRate, lv) * syn.rate;
+  // Aura del Ópalo: se aplica el ópalo más fuerte que alcance a esta torre
+  if (!base.support) {
+    let bestDmg = 0, bestRate = 0, bestRange = 0;
+    for (const o of state.towers) {
+      if (o.type !== "opal" || o === tw) continue;
+      const odef = D.TOWER_TYPES.opal;
+      const oRange = odef.range * (1 + ECON.levelRange * o.level);
+      if (dist2(tw.x, tw.y, o.x, o.y) > oRange * oRange) continue;
+      const boost = odef.auraDmg + 0.03 * o.level;
+      if (boost > bestDmg) {
+        bestDmg = boost;
+        bestRate = odef.auraRate;
+        bestRange = o.evo === "beacon" ? 0.15 : 0;
+      }
+    }
+    if (bestDmg > 0) {
+      dmg *= 1 + bestDmg;
+      rate *= 1 - bestRate;
+      range *= 1 + bestRange;
+      tw.auraBoosted = true;
+    } else {
+      tw.auraBoosted = false;
+    }
+  }
   return { dmg, range, rate, syn };
 }
 const critChance = (syn) => ECON.critChance + (syn ? syn.crit : 0);
@@ -702,7 +771,7 @@ function placeTower(x, y) {
   const type = state.selectedType;
   const def = D.TOWER_TYPES[type];
   const cost = towerCost(type);
-  if (state.wave < def.unlockWave) { sfx.error(); return; }
+  if (state.wave < def.unlockWave || !towerUnlocked(type)) { sfx.error(); return; }
   if (state.energy < cost) {
     sfx.error();
     addText(x, y, t("noEnergy"), "#ff5470", 13);
@@ -929,7 +998,26 @@ function damageEnemy(e, dmg, source, opts) {
   }
 }
 
-function addScore(v) { state.score += Math.round(v * diff().score); }
+function addScore(v) { state.score += Math.round(v * diff().score * D.LAYOUTS[state.layout].score); }
+
+function explodeMortar(p) {
+  burst(p.tx, p.ty, "#ff9a5c", 22, 5);
+  state.shockwaves.push({ x: p.tx, y: p.ty, r: 6, max: p.splash, life: 0.6, color: "rgba(255,154,92,1)" });
+  sfx.meteor();
+  state.shake = Math.max(state.shake, 4);
+  forEnemiesNear(p.tx, p.ty, p.splash, (e) => {
+    if (!targetable(e) || dist2(e.x, e.y, p.tx, p.ty) > p.splash * p.splash) return;
+    rollHit(e, p.dmg, p.source, { syn: p.syn });
+    if (p.source && p.source.evo === "seismic" && !e.dead && !e.slowImmune) {
+      e.slowUntil = state.time + 2;
+      e.slowFactor = 0.6;
+    }
+  });
+  if (p.source && p.source.evo === "magma") {
+    state.pools.push({ x: p.tx, y: p.ty, r: p.splash * 0.7, until: state.time + 3, dps: 15, source: p.source, nextTick: 0 });
+    if (state.pools.length > 12) state.pools.shift();
+  }
+}
 
 function chainExplosion(x, y, n) {
   for (let i = 0; i < n; i++) {
@@ -1087,9 +1175,11 @@ function updateGems(dt) {
 // ---------- Guardado de partida ----------
 function saveGame() {
   const data = {
-    v: 3,
+    v: 4,
     seed: state.seed,
     daily: state.daily,
+    shared: state.shared,
+    layout: state.layout,
     wave: state.wave,
     energy: state.energy,
     score: state.score,
@@ -1114,14 +1204,14 @@ function getSave() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const d = JSON.parse(raw);
-    return d && d.v === 3 ? d : null;
+    return d && d.v === 4 ? d : null;
   } catch (e) { return null; }
 }
 
 function loadGame() {
   const d = getSave();
   if (!d) return false;
-  resetGame(d.difficulty, { seed: d.seed, daily: d.daily, skipTutorial: true });
+  resetGame(d.difficulty, { seed: d.seed, daily: d.daily, shared: d.shared, layout: d.layout, skipTutorial: true });
   state.wave = d.wave;
   state.energy = d.energy;
   state.score = d.score;
@@ -1390,6 +1480,20 @@ function update(dt) {
       });
     }
 
+    if (def.support) {
+      // Ópalo: no ataca. La evolución Prospector extrae energía.
+      if (tw.evo === "prospector" && state.phase === "wave" && !stunned) {
+        if (!tw.nextGen || state.time > tw.nextGen) {
+          tw.nextGen = state.time + 2;
+          state.energy += 1;
+          addText(tw.x, tw.y - 20, "+1 💎", "#6ee7d8", 10);
+          updateHUD();
+        }
+      }
+      tw.angle += dt * 0.6;
+      continue;
+    }
+
     if (def.beam) {
       let target = tw.beamTarget;
       if (!target || target.dead || !targetable(target) || dist2(tw.x, tw.y, target.x, target.y) > st.range * st.range) {
@@ -1429,10 +1533,27 @@ function update(dt) {
       if (tgt) tw.angle = Math.atan2(tgt.y - tw.y, tgt.x - tw.x);
       continue;
     }
-    const targets = pickTargets(tw, st.range, tw.evo === "twin" ? 2 : 1);
+    const targets = pickTargets(tw, st.range, tw.evo === "twin" ? 2 : (def.mortar ? 8 : 1));
     if (!targets.length) continue;
     tw.angle = Math.atan2(targets[0].y - tw.y, targets[0].x - tw.x);
     tw.cooldown = st.rate;
+
+    if (def.mortar) {
+      // Obsidiana: no puede disparar dentro de su alcance mínimo
+      const far = targets.filter(e => dist2(tw.x, tw.y, e.x, e.y) > def.minRange * def.minRange);
+      if (!far.length) { tw.cooldown = 0.2; continue; }
+      const tgt2 = far[0];
+      tw.angle = Math.atan2(tgt2.y - tw.y, tgt2.x - tw.x);
+      state.projectiles.push({
+        kind: "mortar",
+        sx: tw.x, sy: tw.y, tx: tgt2.x, ty: tgt2.y,
+        x: tw.x, y: tw.y, t: 0, dur: 0.9,
+        dmg: st.dmg, splash: def.splash, color: "#ff9a5c",
+        source: tw, syn: st.syn, trail: [],
+      });
+      sfx.shoot();
+      continue;
+    }
 
     if (def.chain) {
       // Rayo encadenado (Amatista)
@@ -1495,6 +1616,17 @@ function update(dt) {
 
   // ----- Proyectiles -----
   for (const p of state.projectiles) {
+    if (p.kind === "mortar") {
+      p.t += dt / p.dur;
+      const tt = Math.min(1, p.t);
+      p.x = lerp(p.sx, p.tx, tt);
+      p.y = lerp(p.sy, p.ty, tt) - Math.sin(tt * Math.PI) * 90;
+      if (p.t >= 1) {
+        p.dead = true;
+        explodeMortar(p);
+      }
+      continue;
+    }
     if (p.kind === "line") {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -1560,6 +1692,19 @@ function update(dt) {
     }
   }
   state.projectiles = state.projectiles.filter(p => !p.dead);
+
+  // Charcos de magma
+  for (const pool of state.pools) {
+    if (state.time > pool.nextTick) {
+      pool.nextTick = state.time + 0.25;
+      forEnemiesNear(pool.x, pool.y, pool.r, (e) => {
+        if (!e.dead && !e.burrowed && dist2(e.x, e.y, pool.x, pool.y) < pool.r * pool.r) {
+          damageEnemy(e, pool.dps * 0.25, pool.source);
+        }
+      });
+    }
+  }
+  state.pools = state.pools.filter(p2 => state.time < p2.until);
 
   updateGems(dt);
   updateParticles(dt);
@@ -1650,6 +1795,9 @@ function finishRun(win) {
   const earned = ECON.fragmentsEarned(state.wave, state.score);
   meta.fragments += earned;
   if (state.score > meta.best) meta.best = state.score;
+  const rk = recordKey(state.difficulty, state.layout, state.daily);
+  if (state.score > (meta.records[rk] || 0)) meta.records[rk] = state.score;
+  if (win && state.layout === "gorge") unlockAchievement("strategist");
   meta.history.unshift({
     d: Date.now(), wave: state.wave, score: state.score,
     diff: state.difficulty, win: !!win, daily: state.daily,
@@ -1738,6 +1886,7 @@ function render() {
   }
 
   drawSpots();
+  drawPools();
   drawCore();
   for (const tw of state.towers) drawTower(tw);
   drawPlacementPreview();
@@ -1772,6 +1921,24 @@ function drawSpots() {
     ctx.font = "11px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("⛰", s.x, s.y + 4);
+  }
+}
+
+function drawPools() {
+  for (const pool of state.pools) {
+    const frac = clamp((pool.until - state.time) / 3, 0, 1);
+    const g = ctx.createRadialGradient(pool.x, pool.y, 4, pool.x, pool.y, pool.r);
+    g.addColorStop(0, `rgba(255,140,60,${0.4 * frac})`);
+    g.addColorStop(0.7, `rgba(200,60,20,${0.25 * frac})`);
+    g.addColorStop(1, "rgba(120,30,10,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(pool.x, pool.y, pool.r, 0, TAU);
+    ctx.fill();
+    if (Math.random() < 0.2) {
+      emit(pool.x + rand(-pool.r * 0.6, pool.r * 0.6), pool.y + rand(-pool.r * 0.6, pool.r * 0.6),
+        rand(-8, 8), rand(-40, -15), 0.5, rand(1, 2.5), "#ff9a5c");
+    }
   }
 }
 
@@ -1908,6 +2075,20 @@ function drawTower(tw) {
   ctx.closePath();
   ctx.fill();
   ctx.restore();
+
+  // Ópalo: motas orbitando
+  if (def.support) {
+    for (let i = 0; i < 3; i++) {
+      const a = state.time * 1.5 + i * TAU / 3;
+      ctx.fillStyle = "#ff9ff5";
+      ctx.shadowColor = "#ff9ff5";
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(tw.x + Math.cos(a) * 13, tw.y + Math.sin(a) * 13, 2, 0, TAU);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
 
   for (let i = 0; i < tw.level; i++) {
     const a = -TAU / 4 + (i - (tw.level - 1) / 2) * 0.45;
@@ -2262,6 +2443,24 @@ function drawGem(g) {
 }
 
 function drawProjectile(p) {
+  if (p.kind === "mortar") {
+    const tt = Math.min(1, p.t);
+    const gx = lerp(p.sx, p.tx, tt), gy = lerp(p.sy, p.ty, tt);
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(gx, gy, 6, 3, 0, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 4.5, 0, TAU);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    return;
+  }
   for (let i = 0; i < p.trail.length; i++) {
     const tp = p.trail[i];
     ctx.globalAlpha = (i / p.trail.length) * 0.4;
@@ -2397,7 +2596,8 @@ const abilityBtns = {};
 
 function buildToolbar() {
   toolbar.innerHTML = "";
-  D.TOWER_ORDER.forEach((type, i) => {
+  for (const key of Object.keys(towerBtns)) delete towerBtns[key];
+  visibleTowers().forEach((type, i) => {
     const def = D.TOWER_TYPES[type];
     const btn = document.createElement("div");
     btn.className = "tower-btn";
@@ -2405,7 +2605,9 @@ function buildToolbar() {
     btn.innerHTML = `<span class="key">${i + 1}</span><div class="gem" style="color:${def.color}">${def.gem}</div><div class="name">${tn(def.name)}</div><div class="cost"></div>`;
     btn.addEventListener("click", () => { ensureAudio(); selectTower(type); });
     btn.addEventListener("mouseenter", (ev) => {
-      const extra = def.beam ? `${t("dpsLabel")} ${def.dmg} · ${t("rangeLabel")} ${def.range}`
+      const extra = def.support ? `${t("auraLabel")} +${Math.round(def.auraDmg * 100)}% · ${t("rangeLabel")} ${def.range}`
+        : def.mortar ? `${t("dmgLabel")} ${def.dmg} · ${t("rangeLabel")} ${def.minRange}–${def.range} · ${t("rateLabel")} ${def.rate}s`
+        : def.beam ? `${t("dpsLabel")} ${def.dmg} · ${t("rangeLabel")} ${def.range}`
         : def.chain ? `${t("dmgLabel")} ${def.dmg} ×${def.chain} · ${t("rangeLabel")} ${def.range}`
         : `${t("dmgLabel")} ${def.dmg} · ${t("rangeLabel")} ${def.range} · ${t("rateLabel")} ${def.rate}s`;
       tooltip.innerHTML = `<b>${tn(def.name)}</b> — ${towerCost(type)} 💎<div class="row">${tn(def.desc)}</div><div class="row">${extra}</div>`;
@@ -2443,7 +2645,7 @@ function buildToolbar() {
 }
 
 function refreshToolbar() {
-  for (const type of D.TOWER_ORDER) {
+  for (const type of visibleTowers()) {
     const btn = towerBtns[type];
     if (!btn) continue;
     const def = D.TOWER_TYPES[type];
@@ -2456,7 +2658,7 @@ function refreshToolbar() {
 }
 
 function refreshTowerCosts() {
-  for (const type of D.TOWER_ORDER) {
+  for (const type of visibleTowers()) {
     const btn = towerBtns[type];
     if (!btn) continue;
     const locked = state.wave < D.TOWER_TYPES[type].unlockWave;
@@ -2491,7 +2693,7 @@ function positionTooltip(mx, my) {
 }
 
 function selectTower(type) {
-  if (state.wave < D.TOWER_TYPES[type].unlockWave) { sfx.error(); return; }
+  if (state.wave < D.TOWER_TYPES[type].unlockWave || !towerUnlocked(type)) { sfx.error(); return; }
   state.selectedType = type;
   refreshToolbar();
 }
@@ -2578,8 +2780,11 @@ canvas.addEventListener("mousemove", (ev) => {
     const synStr = st.syn.list.length
       ? `<div class="row">${t("synergy")}: ${st.syn.list.map(k => D.TOWER_TYPES[k].gem + " " + tn(D.SYNERGIES[k].label)).join(", ")}</div>` : "";
     const empStr = tw.empowered ? `<div class="row">${t("empowered")}</div>` : "";
+    const statRow = def.support
+      ? `${t("auraLabel")} +${Math.round((def.auraDmg + 0.03 * tw.level) * 100)}% · ${t("rangeLabel")} ${st.range.toFixed(0)}`
+      : `${t("dmgLabel")} ${st.dmg.toFixed(0)} · ${t("rangeLabel")} ${st.range.toFixed(0)} · 🎯 ${prioLabel(tw.priority)}`;
     tooltip.innerHTML = `<b>${tn(def.name)}</b> · ${t("lvl")} ${tw.level + 1}${evoStr} · ${tw.kills} ${t("kills")}${vet}` +
-      `<div class="row">${t("dmgLabel")} ${st.dmg.toFixed(0)} · ${t("rangeLabel")} ${st.range.toFixed(0)} · 🎯 ${prioLabel(tw.priority)}</div>` +
+      `<div class="row">${statRow}</div>` +
       synStr + empStr +
       `<div class="row">${up}</div><div class="row">${t("rightSell", Math.round(tw.invested * ECON.sellRefund))}</div>`;
     tooltip.style.display = "block";
@@ -2655,8 +2860,12 @@ window.addEventListener("keydown", (ev) => {
   if (ev.code === "KeyE") { ensureAudio(); useAbility("shield"); return; }
   if (ev.code === "KeyR") { ensureAudio(); useAbility("over"); return; }
   if (ev.code === "KeyT" && state.hoverTower) { cyclePriority(state.hoverTower); return; }
-  const idx = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6"].indexOf(ev.code);
-  if (idx >= 0) { selectTower(D.TOWER_ORDER[idx]); return; }
+  const idx = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8"].indexOf(ev.code);
+  if (idx >= 0) {
+    const vis = visibleTowers();
+    if (idx < vis.length) selectTower(vis[idx]);
+    return;
+  }
   if (ev.code === "Enter" && state.phase === "build" && state.running && !state.gameOver && state.wave > 0) {
     startWave(true);
   }
@@ -2788,6 +2997,7 @@ document.getElementById("import-btn").addEventListener("click", () => {
 
 // ---------- Menú ----------
 let menuDifficulty = "normal";
+let menuLayout = "cavern";
 
 function buildDifficultyRow() {
   const row = document.getElementById("difficulty-row");
@@ -2798,8 +3008,63 @@ function buildDifficultyRow() {
     btn.className = "diff-btn" + (menuDifficulty === key ? " selected" : "");
     btn.style.color = menuDifficulty === key ? d.color : "";
     btn.textContent = tn(d.name);
-    btn.addEventListener("click", () => { menuDifficulty = key; buildDifficultyRow(); });
+    btn.addEventListener("click", () => { menuDifficulty = key; buildDifficultyRow(); updateRecordRow(); });
     row.appendChild(btn);
+  }
+}
+
+function buildLayoutRow() {
+  const row = document.getElementById("layout-row");
+  row.innerHTML = "";
+  for (const key of D.LAYOUT_ORDER) {
+    const lay = D.LAYOUTS[key];
+    const btn = document.createElement("button");
+    btn.className = "diff-btn" + (menuLayout === key ? " selected" : "");
+    btn.style.color = menuLayout === key ? "var(--accent)" : "";
+    btn.textContent = `${lay.icon} ${tn(lay.name)}`;
+    btn.addEventListener("click", () => { menuLayout = key; buildLayoutRow(); updateRecordRow(); });
+    row.appendChild(btn);
+  }
+  document.getElementById("layout-desc").textContent = tn(D.LAYOUTS[menuLayout].desc);
+}
+
+function recordKey(diffKey, layoutKey, daily) {
+  return daily ? "daily" : `${diffKey}|${layoutKey}`;
+}
+
+function updateRecordRow() {
+  const rec = meta.records[recordKey(menuDifficulty, menuLayout, false)];
+  document.getElementById("record-row").textContent = rec ? `${t("recordLbl")}: ${rec} ⭐` : "";
+}
+
+function buildUnlockGrid() {
+  const grid = document.getElementById("unlock-grid");
+  grid.innerHTML = "";
+  for (const type of D.TOWER_ORDER) {
+    const def = D.TOWER_TYPES[type];
+    if (!def.metaUnlock) continue;
+    const owned = meta.unlocked[type];
+    const el = document.createElement("div");
+    el.className = "shop-item";
+    el.innerHTML = `<span class="s-icon" style="color:${def.color}">${def.gem}</span>` +
+      `<div class="s-body"><div class="s-name">${tn(def.name)}</div>` +
+      `<div class="s-desc">${tn(def.desc)}</div></div>`;
+    const btn = document.createElement("button");
+    btn.textContent = owned ? t("unlockedLbl") : t("unlockFor", def.metaUnlock);
+    btn.disabled = owned || meta.fragments < def.metaUnlock;
+    btn.addEventListener("click", () => {
+      if (owned || meta.fragments < def.metaUnlock) return;
+      meta.fragments -= def.metaUnlock;
+      meta.unlocked[type] = true;
+      metaSave();
+      sfx.evolve();
+      unlockAchievement("prospect");
+      buildToolbar();
+      buildUnlockGrid();
+      updateMetaRow();
+    });
+    el.appendChild(btn);
+    grid.appendChild(el);
   }
 }
 
@@ -2880,14 +3145,20 @@ function applyI18n() {
   buildToolbar();
   buildAchGrid();
   buildShop();
+  buildUnlockGrid();
   buildHistory();
   buildDifficultyRow();
+  buildLayoutRow();
+  updateRecordRow();
   updateMetaRow();
 }
 
 function showMenu() {
   buildDifficultyRow();
+  buildLayoutRow();
+  updateRecordRow();
   buildShop();
+  buildUnlockGrid();
   buildAchGrid();
   buildHistory();
   updateMetaRow();
@@ -2920,8 +3191,15 @@ function resetGame(difficulty, opts) {
   state.drafting = false;
   state.endless = false;
   state.daily = !!opts.daily;
+  state.shared = !!opts.shared;
   state.seed = opts.seed !== undefined ? opts.seed : ((Math.random() * 0x7fffffff) | 0);
+  // El diario rota de mapa según la fecha; el resto usa la selección del menú
+  state.layout = opts.layout || (opts.daily ? D.LAYOUT_ORDER[state.seed % D.LAYOUT_ORDER.length] : menuLayout);
   state.difficulty = difficulty || menuDifficulty;
+  meta.layoutsPlayed[state.layout] = true;
+  if (D.LAYOUT_ORDER.every(k => meta.layoutsPlayed[k])) unlockAchievement("cartographer");
+  metaSave();
+  if (state.shared) unlockAchievement("challenger");
   state.energy = metaStartEnergy();
   state.score = 0;
   state.wave = 0;
@@ -2949,6 +3227,7 @@ function resetGame(difficulty, opts) {
   state.texts = [];
   state.shockwaves = [];
   state.timers = [];
+  state.pools = [];
   state.waveLog = [];
   state.combo = 0;
   state.comboTimer = 0;
@@ -2968,7 +3247,9 @@ function resetGame(difficulty, opts) {
   refreshToolbar();
   refreshAbilityBar();
   updateHUD();
-  if (state.daily) {
+  if (state.shared) {
+    showBanner(t("challengeBanner"), t("challengeSub", runCode()));
+  } else if (state.daily) {
     showBanner(t("dailyRun"), t("dailySub", state.seed));
   } else {
     showBanner(t("getReady"), t("getReadySub", tn(diff().name)));
@@ -3012,6 +3293,96 @@ document.getElementById("endless-btn").addEventListener("click", () => {
   updateHUD();
 });
 document.getElementById("vmenu-btn").addEventListener("click", goToMenu);
+
+// ---------- Códigos de reto ----------
+// GEO-<semilla base36>-<dificultad><mapa>: reproduce terreno, oleadas,
+// mutadores y élites de una partida para competir con la misma caverna.
+function runCode() {
+  const dIdx = Object.keys(D.DIFFICULTIES).indexOf(state.difficulty);
+  const lIdx = D.LAYOUT_ORDER.indexOf(state.layout);
+  return `GEO-${state.seed.toString(36).toUpperCase()}-${dIdx}${lIdx}`;
+}
+function parseRunCode(str) {
+  const m = /^GEO-([0-9A-Z]+)-([0-2])([0-3])$/i.exec((str || "").trim());
+  if (!m) return null;
+  const seed = parseInt(m[1], 36);
+  if (!Number.isFinite(seed) || seed < 0) return null;
+  return {
+    seed,
+    difficulty: Object.keys(D.DIFFICULTIES)[Number(m[2])],
+    layout: D.LAYOUT_ORDER[Number(m[3])],
+  };
+}
+document.getElementById("code-btn").addEventListener("click", () => {
+  const code = window.prompt(t("codePrompt"), "");
+  if (!code) return;
+  const parsed = parseRunCode(code);
+  if (!parsed) { showToast("⚠️", t("codeBad"), ""); return; }
+  ensureAudio();
+  deleteSave();
+  resetGame(parsed.difficulty, { seed: parsed.seed, layout: parsed.layout, shared: true });
+});
+const showRunCode = () => window.prompt(t("runCode"), runCode());
+document.getElementById("go-code-btn").addEventListener("click", showRunCode);
+document.getElementById("vic-code-btn").addEventListener("click", showRunCode);
+
+// ---------- Tarjeta de resultado (PNG descargable) ----------
+function saveResultCard() {
+  const c = document.createElement("canvas");
+  c.width = 640; c.height = 360;
+  const g = c.getContext("2d");
+  const bg = g.createLinearGradient(0, 0, 640, 360);
+  bg.addColorStop(0, "#181530");
+  bg.addColorStop(1, "#0b0a14");
+  g.fillStyle = bg;
+  g.fillRect(0, 0, 640, 360);
+  g.strokeStyle = "rgba(140,120,255,0.4)";
+  g.strokeRect(6.5, 6.5, 627, 347);
+  g.textAlign = "left";
+  g.fillStyle = "#b9a8ff";
+  g.font = "900 34px 'Segoe UI', sans-serif";
+  g.fillText("G E O D A", 30, 56);
+  g.fillStyle = "#9a92c9";
+  g.font = "14px 'Segoe UI', sans-serif";
+  g.fillText(t("tagline"), 32, 80);
+  g.fillStyle = "#ffc94a";
+  g.font = "900 52px 'Segoe UI', sans-serif";
+  g.fillText(`${state.score} ⭐`, 30, 150);
+  const lay = D.LAYOUTS[state.layout];
+  g.fillStyle = "#e8e4ff";
+  g.font = "16px 'Segoe UI', sans-serif";
+  g.fillText(`${t("waveN")} ${state.wave}${state.endless ? "∞" : "/" + WIN_WAVE} · ${tn(diff().name)} · ${lay.icon} ${tn(lay.name)}${state.daily ? " · 📅" : ""}`, 32, 184);
+  const s = state.stats;
+  g.fillStyle = "#9a92c9";
+  g.font = "13px 'Segoe UI', sans-serif";
+  g.fillText(`${s.kills} ${t("statKills").toLowerCase()} · ${s.crits} crit · ${s.perfectWaves} ✨ · ${Math.round(s.dmgDealt)} dmg`, 32, 208);
+  const log = state.waveLog;
+  if (log.length) {
+    const x0 = 32, y0 = 330, ww = 576, hh = 86;
+    const maxD = Math.max(1, ...log.map(v => v.dealt));
+    const bw = ww / log.length;
+    g.fillStyle = "rgba(140,120,255,0.55)";
+    for (let i = 0; i < log.length; i++) {
+      const h = (log[i].dealt / maxD) * hh;
+      g.fillRect(x0 + i * bw + 1, y0 - h, Math.max(2, bw - 2), h);
+    }
+  }
+  g.fillStyle = "#6ee7d8";
+  g.font = "13px 'Segoe UI', sans-serif";
+  g.textAlign = "right";
+  g.fillText(runCode(), 608, 348);
+  const a = document.createElement("a");
+  a.download = `geoda-${state.score}.png`;
+  a.href = c.toDataURL("image/png");
+  a.click();
+}
+document.getElementById("go-card-btn").addEventListener("click", saveResultCard);
+document.getElementById("vic-card-btn").addEventListener("click", saveResultCard);
+
+// ---------- PWA ----------
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  navigator.serviceWorker.register("sw.js").catch(() => { /* offline opcional */ });
+}
 
 // ---------- Arranque ----------
 resize();
