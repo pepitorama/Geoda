@@ -42,6 +42,7 @@ function loadMeta() {
     records: {},           // "normal|gorge" -> mejor puntuación
     layoutsPlayed: {},
     campaign: {},          // "c3" -> estrellas (0-3)
+    ascension: 0,          // nivel máximo de Ascensión desbloqueado
   };
   try {
     const raw = localStorage.getItem(META_KEY);
@@ -57,6 +58,7 @@ function loadMeta() {
         records: m.records || {},
         layoutsPlayed: m.layoutsPlayed || {},
         campaign: m.campaign || {},
+        ascension: m.ascension || 0,
       };
     }
   } catch (e) { /* meta corrupta: empezar de cero */ }
@@ -91,6 +93,9 @@ const state = {
   endless: false, daily: false, shared: false, seed: 0,
   layout: "cavern",
   campaign: null,        // definición del nivel de campaña activo
+  ascension: 0,          // nivel de Ascensión de esta partida
+  customTerrain: null,   // { rocks:[{x,y,r}], spots:[{x,y}] } del editor
+  editing: false,
   difficulty: "normal",
   energy: 0, score: 0, wave: 0,
   coreHp: 100, coreMaxHp: 100, corePulse: 0,
@@ -117,6 +122,11 @@ function freshStats() {
 state.stats = freshStats();
 
 const winWave = () => state.campaign ? state.campaign.waves : WIN_WAVE;
+const A = D.ASCENSION;
+const ascHpMult = () => 1 + A.hpPer * state.ascension;
+const ascSpeedMult = () => 1 + A.speedPer * state.ascension;
+const ascBountyMult = () => 1 - A.bountyPer * state.ascension;
+const ascScoreMult = () => 1 + A.scorePer * state.ascension;
 
 const hasRelic = (id) => state.relics.includes(id);
 const relicCostMult = () => hasRelic("market") ? 0.9 : 1;
@@ -360,6 +370,15 @@ function genTerrain() {
     }
     state.rocks.push({ x, y, r, pts, hue: 230 + Math.floor(rng() * 60) });
   };
+
+  // Terreno del editor: posiciones relativas al centro, escaladas a la pantalla
+  if (state.customTerrain) {
+    for (const rk of state.customTerrain.rocks) addRock(CX + rk.dx, CY + rk.dy, rk.r);
+    for (const sp of state.customTerrain.spots) {
+      state.spots.push({ x: clamp(CX + sp.dx, 40, W - 40), y: clamp(CY + sp.dy, 40, H - 40), r: 26, seed: rng() * TAU });
+    }
+    return;
+  }
 
   if (layout === "void") {
     return; // campo abierto: sin rocas ni vetas
@@ -645,8 +664,8 @@ function makeEnemy(typeName, x, y, opts) {
   const mut = state.mutator;
   const rng = state.waveRng;
   let hpMult = ECON.hpMultiplier(state.wave) * d.hp * ((opts && opts.hpMult) || 1) *
-    ((state.campaign && state.campaign.hpMult) || 1);
-  let speedMult = d.speed;
+    ((state.campaign && state.campaign.hpMult) || 1) * ascHpMult();
+  let speedMult = d.speed * ascSpeedMult();
   if (mut) {
     if (mut.hp) hpMult *= mut.hp;
     if (mut.speed) speedMult *= mut.speed;
@@ -656,7 +675,7 @@ function makeEnemy(typeName, x, y, opts) {
     hp: base.hp * hpMult, maxHp: base.hp * hpMult,
     speed: base.speed * (0.9 + rng() * 0.2) * speedMult,
     radius: base.radius, dmg: base.dmg,
-    bounty: Math.round(base.bounty * d.bounty * ((mut && mut.bounty) || 1)),
+    bounty: Math.max(1, Math.round(base.bounty * d.bounty * ((mut && mut.bounty) || 1) * ascBountyMult())),
     score: base.score, color: base.color, shape: base.shape,
     splits: base.splits || 0,
     slowImmune: !!base.slowImmune, critImmune: !!base.critImmune,
@@ -1037,7 +1056,7 @@ function damageEnemy(e, dmg, source, opts) {
   }
 }
 
-function addScore(v) { state.score += Math.round(v * diff().score * D.LAYOUTS[state.layout].score); }
+function addScore(v) { state.score += Math.round(v * diff().score * D.LAYOUTS[state.layout].score * ascScoreMult()); }
 
 function explodeMortar(p) {
   burst(p.tx, p.ty, "#ff9a5c", 22, 5);
@@ -1220,6 +1239,8 @@ function saveGame() {
     shared: state.shared,
     layout: state.layout,
     campaignId: state.campaign ? state.campaign.id : null,
+    ascension: state.ascension,
+    customTerrain: state.customTerrain,
     wave: state.wave,
     energy: state.energy,
     score: state.score,
@@ -1254,6 +1275,7 @@ function loadGame() {
   resetGame(d.difficulty, {
     seed: d.seed, daily: d.daily, shared: d.shared, layout: d.layout,
     campaign: d.campaignId ? D.CAMPAIGN.find(l => l.id === d.campaignId) : null,
+    ascension: d.ascension || 0, customTerrain: d.customTerrain || null,
     skipTutorial: true,
   });
   state.wave = d.wave;
@@ -1897,6 +1919,13 @@ function showVictoryOverlay(earnedText) {
 function victory() {
   state.running = false;
   unlockAchievement("legend");
+  if (state.ascension > 0) unlockAchievement("ascended");
+  // Ganar al nivel actual desbloquea la siguiente Ascensión
+  if (state.ascension >= meta.ascension && meta.ascension < A.max) {
+    meta.ascension = state.ascension + 1;
+    metaSave();
+    showToast("☄️", t("ascUnlocked", meta.ascension), t("ascDesc", meta.ascension));
+  }
   const earned = finishRun(true);
   document.getElementById("victory-title").textContent = t("victoryT");
   document.getElementById("victory-sub").textContent = t("victoryP");
@@ -1990,6 +2019,8 @@ function render() {
     ctx.globalAlpha = 1;
   }
 
+  if (state.editing) { drawEditor(); ctx.restore(); return; }
+
   drawSpots();
   drawPools();
   drawCore();
@@ -2006,6 +2037,64 @@ function render() {
   drawVignette();
 
   ctx.restore();
+}
+
+function drawEditor() {
+  // Núcleo fantasma y zona de exclusión
+  ctx.strokeStyle = "rgba(140,120,255,0.35)";
+  ctx.setLineDash([6, 8]);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(CX, CY, 90, 0, TAU);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(140,120,255,0.5)";
+  ctx.font = "24px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("🔮", CX, CY + 8);
+
+  for (const rock of editor.rocks) {
+    ctx.save();
+    ctx.translate(rock.x, rock.y);
+    ctx.beginPath();
+    rock.pts.forEach(([px, py], i) => i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py));
+    ctx.closePath();
+    ctx.fillStyle = "hsl(240, 24%, 20%)";
+    ctx.fill();
+    ctx.strokeStyle = "hsla(240, 45%, 55%, 0.5)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+  for (const s of editor.spots) {
+    ctx.strokeStyle = "rgba(255,201,74,0.5)";
+    ctx.setLineDash([5, 6]);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(255,201,74,0.7)";
+    ctx.font = "13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("⛰", s.x, s.y + 4);
+  }
+
+  // Vista previa de la herramienta bajo el cursor
+  if (state.mouseX && !(state.mouseX < 200 && state.mouseY < 360)) {
+    ctx.globalAlpha = 0.4;
+    if (editor.tool === "rock") {
+      ctx.fillStyle = "hsl(240, 30%, 30%)";
+      ctx.beginPath();
+      ctx.arc(state.mouseX, state.mouseY, editor.size, 0, TAU);
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = "#ffc94a";
+      ctx.beginPath();
+      ctx.arc(state.mouseX, state.mouseY, 26, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
 }
 
 function drawSpots() {
@@ -2916,6 +3005,7 @@ canvas.addEventListener("click", (ev) => {
 
 canvas.addEventListener("contextmenu", (ev) => {
   ev.preventDefault();
+  if (state.editing) { editorPaint(ev.clientX, ev.clientY, true); return; }
   if (!state.running || state.gameOver || state.paused || state.drafting) return;
   const tw = towerAt(ev.clientX, ev.clientY);
   if (tw) sellTower(tw);
@@ -3142,6 +3232,16 @@ function updateRecordRow() {
   document.getElementById("record-row").textContent = rec ? `${t("recordLbl")}: ${rec} ⭐` : "";
 }
 
+let menuAscension = 0;
+function updateAscRow() {
+  const row = document.getElementById("asc-row");
+  row.classList.toggle("hidden", meta.ascension <= 0);
+  if (meta.ascension <= 0) { menuAscension = 0; return; }
+  menuAscension = clamp(menuAscension, 0, meta.ascension);
+  document.getElementById("asc-level").textContent = menuAscension;
+  document.getElementById("asc-desc").textContent = t("ascDesc", menuAscension);
+}
+
 function buildUnlockGrid() {
   const grid = document.getElementById("unlock-grid");
   grid.innerHTML = "";
@@ -3262,6 +3362,7 @@ function showMenu() {
   buildDifficultyRow();
   buildLayoutRow();
   updateRecordRow();
+  updateAscRow();
   buildShop();
   buildUnlockGrid();
   buildAchGrid();
@@ -3300,6 +3401,9 @@ function resetGame(difficulty, opts) {
   state.daily = !!opts.daily;
   state.shared = !!opts.shared;
   state.campaign = opts.campaign || null;
+  state.ascension = opts.ascension || 0;
+  state.customTerrain = opts.customTerrain || null;
+  state.editing = false;
   state.seed = opts.seed !== undefined ? opts.seed : ((Math.random() * 0x7fffffff) | 0);
   // El diario rota de mapa según la fecha; el resto usa la selección del menú
   state.layout = opts.layout || (opts.daily ? D.LAYOUT_ORDER[state.seed % D.LAYOUT_ORDER.length] : menuLayout);
@@ -3308,6 +3412,7 @@ function resetGame(difficulty, opts) {
   if (D.LAYOUT_ORDER.every(k => meta.layoutsPlayed[k])) unlockAchievement("cartographer");
   metaSave();
   if (state.shared) unlockAchievement("challenger");
+  if (state.customTerrain) unlockAchievement("architect");
   state.energy = state.campaign && state.campaign.startEnergy !== undefined
     ? state.campaign.startEnergy : metaStartEnergy();
   state.score = 0;
@@ -3359,6 +3464,8 @@ function resetGame(difficulty, opts) {
   updateHUD();
   if (state.campaign) {
     showBanner(`${state.campaign.icon} ${tn(state.campaign.name).toUpperCase()}`, tn(state.campaign.desc));
+  } else if (state.ascension > 0) {
+    showBanner(t("ascBanner", state.ascension), t("ascDesc", state.ascension));
   } else if (state.shared) {
     showBanner(t("challengeBanner"), t("challengeSub", runCode()));
   } else if (state.daily) {
@@ -3374,7 +3481,9 @@ function resetGame(difficulty, opts) {
   else setTutStep(0);
 }
 
-document.getElementById("start-btn").addEventListener("click", () => { ensureAudio(); deleteSave(); resetGame(); });
+document.getElementById("start-btn").addEventListener("click", () => { ensureAudio(); deleteSave(); resetGame(undefined, { ascension: menuAscension }); });
+document.getElementById("asc-minus").addEventListener("click", () => { menuAscension = clamp(menuAscension - 1, 0, meta.ascension); updateAscRow(); });
+document.getElementById("asc-plus").addEventListener("click", () => { menuAscension = clamp(menuAscension + 1, 0, meta.ascension); updateAscRow(); });
 document.getElementById("daily-btn").addEventListener("click", () => {
   ensureAudio();
   deleteSave();
@@ -3390,6 +3499,8 @@ function retryOpts() {
   if (state.campaign) return { campaign: state.campaign, seed: state.campaign.seed, layout: state.campaign.layout, skipTutorial: true };
   if (state.daily) return { daily: true, seed: state.seed };
   if (state.shared) return { shared: true, seed: state.seed, layout: state.layout };
+  if (state.customTerrain) return { customTerrain: state.customTerrain, ascension: state.ascension, skipTutorial: true };
+  if (state.ascension > 0) return { ascension: state.ascension };
   return undefined;
 }
 document.getElementById("retry-btn").addEventListener("click", () => {
@@ -3510,6 +3621,136 @@ function saveResultCard() {
 }
 document.getElementById("go-card-btn").addEventListener("click", saveResultCard);
 document.getElementById("vic-card-btn").addEventListener("click", saveResultCard);
+
+// ---------- Editor de mapas ----------
+// El terreno se guarda relativo al centro con una resolución de rejilla de 8 px
+// para que el código sea corto y reproducible en cualquier tamaño de pantalla.
+const editor = { rocks: [], spots: [], tool: "rock", size: 40, painting: false };
+const editorPanel = document.getElementById("editor-panel");
+
+function editorTerrain() {
+  return {
+    rocks: editor.rocks.map(r => ({ dx: r.x - CX, dy: r.y - CY, r: r.r })),
+    spots: editor.spots.map(s => ({ dx: s.x - CX, dy: s.y - CY })),
+  };
+}
+
+function openEditor() {
+  ensureAudio();
+  state.editing = true;
+  state.running = false;
+  editor.rocks = [];
+  editor.spots = [];
+  document.getElementById("menu").classList.add("hidden");
+  editorPanel.classList.remove("hidden");
+  showBanner("🛠 " + t("editorBtn").replace("🛠 ", ""), t("editorHint"));
+}
+
+function closeEditor() {
+  state.editing = false;
+  editorPanel.classList.add("hidden");
+  goToMenu();
+}
+
+function editorPaint(x, y, erase) {
+  if (y < 60 || y > H - 40 || dist2(x, y, CX, CY) < 90 * 90) return;
+  if (erase) {
+    editor.rocks = editor.rocks.filter(r => dist2(x, y, r.x, r.y) > r.r * r.r);
+    editor.spots = editor.spots.filter(s => dist2(x, y, s.x, s.y) > 30 * 30);
+    return;
+  }
+  if (editor.tool === "rock") {
+    if (editor.rocks.some(r => dist2(x, y, r.x, r.y) < (r.r * 0.6) * (r.r * 0.6))) return;
+    const rng = D.mulberry32(hash2(x | 0, y | 0));
+    const n = 7 + Math.floor(rng() * 4);
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      const m = 0.75 + rng() * 0.4;
+      pts.push([Math.cos(a) * editor.size * m, Math.sin(a) * editor.size * m]);
+    }
+    editor.rocks.push({ x, y, r: editor.size, pts, hue: 240 });
+    if (editor.rocks.length > 60) editor.rocks.shift();
+  } else {
+    if (editor.spots.some(s => dist2(x, y, s.x, s.y) < 60 * 60)) return;
+    editor.spots.push({ x, y, r: 26, seed: rng01() * TAU });
+    if (editor.spots.length > 12) editor.spots.shift();
+  }
+}
+function rng01() { return Math.random(); }
+
+function encodeMap() {
+  const q = (v) => Math.round(v / 8); // rejilla de 8 px
+  const rocks = editor.rocks.map(r => `${q(r.x - CX)}.${q(r.y - CY)}.${q(r.r)}`).join("_");
+  const spots = editor.spots.map(s => `${q(s.x - CX)}.${q(s.y - CY)}`).join("_");
+  return `GEOM-${rocks}~${spots}`;
+}
+function decodeMap(code) {
+  const m = /^GEOM-(.*)~(.*)$/.exec((code || "").trim());
+  if (!m) return null;
+  const parseRocks = (s) => s ? s.split("_").filter(Boolean).map(tok => {
+    const p = tok.split(".").map(Number);
+    if (p.length !== 3 || p.some(n => !Number.isFinite(n))) return null;
+    return { dx: p[0] * 8, dy: p[1] * 8, r: clamp(p[2] * 8, 18, 70) };
+  }).filter(Boolean) : [];
+  const parseSpots = (s) => s ? s.split("_").filter(Boolean).map(tok => {
+    const p = tok.split(".").map(Number);
+    if (p.length !== 2 || p.some(n => !Number.isFinite(n))) return null;
+    return { dx: p[0] * 8, dy: p[1] * 8 };
+  }).filter(Boolean) : [];
+  const rocks = parseRocks(m[1]);
+  const spots = parseSpots(m[2]);
+  if (!rocks.length && !spots.length) return null;
+  return { rocks, spots };
+}
+
+// Selección de herramienta y tamaño
+document.getElementById("ep-rock").addEventListener("click", () => {
+  editor.tool = "rock";
+  document.getElementById("ep-rock").classList.add("selected");
+  document.getElementById("ep-spot").classList.remove("selected");
+});
+document.getElementById("ep-spot").addEventListener("click", () => {
+  editor.tool = "spot";
+  document.getElementById("ep-spot").classList.add("selected");
+  document.getElementById("ep-rock").classList.remove("selected");
+});
+document.getElementById("ep-size").addEventListener("input", (ev) => { editor.size = Number(ev.target.value); });
+document.getElementById("ep-clear").addEventListener("click", () => { editor.rocks = []; editor.spots = []; });
+document.getElementById("ep-exit").addEventListener("click", closeEditor);
+document.getElementById("ep-export").addEventListener("click", () => { window.prompt(t("mapCode"), encodeMap()); });
+document.getElementById("ep-import").addEventListener("click", () => {
+  const code = window.prompt(t("mapCodePrompt"), "");
+  if (!code) return;
+  const terr = decodeMap(code);
+  if (!terr) { showToast("⚠️", t("codeBad"), ""); return; }
+  editor.rocks = terr.rocks.map(r => {
+    const rng = D.mulberry32(hash2((CX + r.dx) | 0, (CY + r.dy) | 0));
+    const n = 7 + Math.floor(rng() * 4);
+    const pts = [];
+    for (let i = 0; i < n; i++) { const a = (i / n) * TAU; const m = 0.75 + rng() * 0.4; pts.push([Math.cos(a) * r.r * m, Math.sin(a) * r.r * m]); }
+    return { x: CX + r.dx, y: CY + r.dy, r: r.r, pts, hue: 240 };
+  });
+  editor.spots = terr.spots.map(s => ({ x: CX + s.dx, y: CY + s.dy, r: 26, seed: Math.random() * TAU }));
+});
+document.getElementById("ep-test").addEventListener("click", () => {
+  editorPanel.classList.add("hidden");
+  state.editing = false;
+  deleteSave();
+  resetGame("normal", { customTerrain: editorTerrain(), ascension: 0, skipTutorial: true });
+});
+document.getElementById("editor-btn").addEventListener("click", openEditor);
+
+// Pintado con el ratón (el editor intercepta los clics del canvas)
+canvas.addEventListener("mousedown", (ev) => {
+  if (!state.editing) return;
+  editor.painting = ev.button === 0 || ev.button === 2;
+  editorPaint(ev.clientX, ev.clientY, ev.button === 2);
+});
+window.addEventListener("mouseup", () => { editor.painting = false; });
+canvas.addEventListener("mousemove", (ev) => {
+  if (state.editing && editor.painting) editorPaint(ev.clientX, ev.clientY, false);
+});
 
 // ---------- PWA ----------
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {

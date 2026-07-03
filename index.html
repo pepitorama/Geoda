@@ -327,6 +327,31 @@
   .draft-card .d-name { font-size: 14.5px; font-weight: 800; margin-top: 8px; }
   .draft-card .d-desc { font-size: 11.5px; color: var(--dim); margin-top: 6px; line-height: 1.45; }
 
+  /* ---------- Editor ---------- */
+  #editor-panel {
+    position: fixed; top: 70px; left: 14px; z-index: 20; width: 172px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.55);
+  }
+  #editor-panel .ep-title { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+  #editor-panel .ep-hint { font-size: 10.5px; color: var(--dim); margin-bottom: 8px; line-height: 1.4; }
+  #editor-panel .ep-tools { display: flex; gap: 6px; margin-bottom: 8px; }
+  #editor-panel .ep-tool {
+    flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 700; cursor: pointer;
+    background: rgba(255,255,255,.05); color: var(--dim);
+    border: 2px solid transparent; border-radius: 8px;
+  }
+  #editor-panel .ep-tool.selected { color: var(--text); border-color: var(--accent); }
+  #editor-panel .ep-size { display: block; font-size: 11px; color: var(--dim); margin-bottom: 8px; }
+  #editor-panel .ep-size input { width: 100%; accent-color: var(--accent); }
+  #editor-panel .ep-actions { display: flex; flex-direction: column; gap: 5px; }
+  #editor-panel .ep-actions button {
+    padding: 7px; font-size: 11.5px; font-weight: 700; cursor: pointer;
+    background: rgba(255,255,255,.06); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  #editor-panel .ep-actions button:hover { background: rgba(140,120,255,.15); }
+
   /* ---------- Campaña ---------- */
   #campaign-grid {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -425,6 +450,25 @@
 <div id="toasts"></div>
 <div id="tutorial"></div>
 
+<div id="editor-panel" class="hidden">
+  <div class="ep-title" data-i18n="editorBtn"></div>
+  <div class="ep-hint" data-i18n="editorHint"></div>
+  <div class="ep-tools">
+    <button id="ep-rock" class="ep-tool selected" data-i18n="editorRock"></button>
+    <button id="ep-spot" class="ep-tool" data-i18n="editorSpot"></button>
+  </div>
+  <label class="ep-size"><span data-i18n="editorSize"></span>
+    <input type="range" id="ep-size" min="22" max="60" value="40">
+  </label>
+  <div class="ep-actions">
+    <button id="ep-test" data-i18n="editorTest"></button>
+    <button id="ep-export" data-i18n="editorExport"></button>
+    <button id="ep-import" data-i18n="editorImport"></button>
+    <button id="ep-clear" data-i18n="editorClear"></button>
+    <button id="ep-exit" data-i18n="editorExit"></button>
+  </div>
+</div>
+
 <!-- ================= MENÚ ================= -->
 <div class="overlay" id="menu">
   <h1>G E O D A</h1>
@@ -443,10 +487,20 @@
         <button class="big-btn" id="start-btn" data-i18n="start"></button>
         <button class="big-btn gold hidden" id="continue-btn" data-i18n="cont"></button>
       </div>
+      <div id="asc-row" class="hidden">
+        <h3 data-i18n="ascTitle" style="margin-bottom:4px;"></h3>
+        <div style="display:flex; gap:10px; align-items:center; justify-content:center;">
+          <button class="diff-btn" id="asc-minus">−</button>
+          <span id="asc-level" style="font-weight:800; min-width:26px;">0</span>
+          <button class="diff-btn" id="asc-plus">+</button>
+        </div>
+        <p id="asc-desc" style="font-size:11.5px; margin-top:4px;"></p>
+      </div>
       <div class="btn-row">
         <button class="big-btn gold" id="campaign-btn" data-i18n="campaignBtn"></button>
         <button class="big-btn secondary" id="daily-btn" data-i18n="daily"></button>
         <button class="big-btn secondary" id="code-btn" data-i18n="playCode"></button>
+        <button class="big-btn secondary" id="editor-btn" data-i18n="editorBtn"></button>
         <button class="big-btn secondary" id="settings-btn" data-i18n="settings"></button>
       </div>
       <p id="daily-best-row" style="margin-top:8px; font-size:12px;"></p>

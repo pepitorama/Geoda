@@ -293,6 +293,10 @@
   const STAR_THRESHOLDS = { two: 0.6, three: 0.95 };
   const STAR_REWARD = 15;
 
+  // ---------- Ascensión (new game+) ----------
+  // Cada victoria en modo libre al nivel máximo desbloquea el siguiente
+  const ASCENSION = { hpPer: 0.08, speedPer: 0.02, bountyPer: 0.02, scorePer: 0.2, max: 10 };
+
   // ---------- Habilidades ----------
   const ABILITIES = [
     { id: "pulse", icon: "⚡", name: { es: "Pulso", en: "Pulse" }, key: "ESP", keyEn: "SPC", code: "Space", cd: 25, unlock: 0, desc: { es: "Onda que daña y empuja alrededor del núcleo.", en: "Wave that damages and knocks back around the core." } },
@@ -331,6 +335,8 @@
     { id: "challenger", icon: "🎲", name: { es: "Retador", en: "Challenger" }, desc: { es: "Juega un código compartido", en: "Play a shared code" }, frag: 10 },
     { id: "conqueror", icon: "🗻", name: { es: "Conquistador", en: "Conqueror" }, desc: { es: "Completa los 9 niveles de la campaña", en: "Complete all 9 campaign levels" }, frag: 60 },
     { id: "perfectionist", icon: "🌟", name: { es: "Perfeccionista", en: "Perfectionist" }, desc: { es: "Consigue 3 estrellas en un nivel", en: "Earn 3 stars on a level" }, frag: 20 },
+    { id: "architect", icon: "🛠️", name: { es: "Arquitecto", en: "Architect" }, desc: { es: "Juega un mapa del editor", en: "Play a map from the editor" }, frag: 15 },
+    { id: "ascended", icon: "☄️", name: { es: "Ascendido", en: "Ascended" }, desc: { es: "Gana una partida con Ascensión", en: "Win a run with Ascension" }, frag: 30 },
   ];
 
   // ---------- Economía y progresión ----------
@@ -459,6 +465,15 @@
       campaignSub: "Niveles con reglas propias. ★ completar · ★★ núcleo ≥60% · ★★★ núcleo ≥95%",
       levelWaves: (n) => `${n} oleadas`, levelClear: "¡NIVEL SUPERADO!",
       nextLevel: "Siguiente nivel ▶", lockedLevel: "Supera el nivel anterior",
+      editorBtn: "🛠 Editor", editorRock: "⛰ Roca", editorSpot: "✨ Veta", editorSize: "Tamaño",
+      editorClear: "🗑 Limpiar", editorTest: "▶ Probar", editorExport: "📤 Código",
+      editorImport: "📥 Importar", editorExit: "✕ Salir",
+      editorHint: "Clic: colocar · Clic derecho: borrar",
+      mapCode: "Código del mapa (compártelo):", mapCodePrompt: "Pega un código de mapa (GEOM-…):",
+      ascTitle: "☄️ Ascensión", ascNone: "—",
+      ascDesc: (n) => n === 0 ? "Sin modificadores" : `+${8 * n}% vida y +${2 * n}% velocidad enemiga · ×${(1 + 0.2 * n).toFixed(1)} puntuación`,
+      ascUnlocked: (n) => `¡Ascensión ${n} desbloqueada!`,
+      ascBanner: (n) => `☄️ Ascensión ${n}`,
       helpBody: [
         "<h3>Controles</h3>",
         "<kbd>Clic</kbd> colocar torre / mejorar / evolucionar &nbsp; <kbd>Clic dcho.</kbd> vender (60%) &nbsp; <kbd>1-6</kbd> elegir cristal &nbsp; <kbd>T</kbd> prioridad de la torre bajo el cursor<br>",
@@ -543,6 +558,15 @@
       campaignSub: "Levels with their own rules. ★ complete · ★★ core ≥60% · ★★★ core ≥95%",
       levelWaves: (n) => `${n} waves`, levelClear: "LEVEL CLEARED!",
       nextLevel: "Next level ▶", lockedLevel: "Beat the previous level",
+      editorBtn: "🛠 Editor", editorRock: "⛰ Rock", editorSpot: "✨ Vein", editorSize: "Size",
+      editorClear: "🗑 Clear", editorTest: "▶ Test", editorExport: "📤 Code",
+      editorImport: "📥 Import", editorExit: "✕ Exit",
+      editorHint: "Click: place · Right-click: erase",
+      mapCode: "Map code (share it):", mapCodePrompt: "Paste a map code (GEOM-…):",
+      ascTitle: "☄️ Ascension", ascNone: "—",
+      ascDesc: (n) => n === 0 ? "No modifiers" : `+${8 * n}% enemy HP and +${2 * n}% speed · ×${(1 + 0.2 * n).toFixed(1)} score`,
+      ascUnlocked: (n) => `Ascension ${n} unlocked!`,
+      ascBanner: (n) => `☄️ Ascension ${n}`,
       helpBody: [
         "<h3>Controls</h3>",
         "<kbd>Click</kbd> place / upgrade / evolve &nbsp; <kbd>Right-click</kbd> sell (60%) &nbsp; <kbd>1-6</kbd> pick crystal &nbsp; <kbd>T</kbd> targeting priority under cursor<br>",
@@ -570,7 +594,7 @@
     BOSS_KINDS, BOSS_ROTATION, bossKindForWave,
     ELITE_AFFIXES, MUTATORS, MUTATOR_CHANCE, MUTATOR_MIN_WAVE,
     RELICS, RELIC_INTERVAL, LAYOUTS, LAYOUT_ORDER,
-    CAMPAIGN, STAR_THRESHOLDS, STAR_REWARD,
+    CAMPAIGN, STAR_THRESHOLDS, STAR_REWARD, ASCENSION,
     ABILITIES, SHOP, shopCost, ACHIEVEMENTS,
     ECON, waveComposition, STRINGS,
   };

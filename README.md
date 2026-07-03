@@ -1,11 +1,21 @@
-# 💎 GEODA — Defiende el Núcleo · v5 «Edición Génesis»
+# 💎 GEODA — Defiende el Núcleo · v6 «Edición Arquitecto»
 
 Un juego de **defiende tu base** (tower defense) hecho en HTML5 Canvas puro.
 Sin dependencias, sin build: abre `index.html` en el navegador y juega.
 En español e inglés, en escritorio y táctil. Instalable como **PWA** con
 juego sin conexión cuando se sirve por HTTP.
 
-## 🆕 Novedades de la v5
+## 🆕 Novedades de la v6
+
+- **🛠 Editor de mapas**: diseña tu propia caverna colocando rocas (con
+  tamaño ajustable) y vetas de poder, pruébala al instante y compártela con
+  un **código `GEOM-…`** que reproduce el terreno en cualquier pantalla.
+- **☄️ Ascensión (new game+)**: al ganar en modo libre desbloqueas hasta 10
+  niveles de Ascensión que endurecen a los enemigos (+8% vida y +2%
+  velocidad por nivel) a cambio de ×1,2 de puntuación por nivel.
+- **2 logros nuevos** (Arquitecto y Ascendido — 20 en total).
+
+## Novedades de la v5
 
 - **🗻 Campaña de la Caverna**: 9 niveles diseñados a mano con reglas
   propias — torres prohibidas, presupuesto ajustado, núcleo frágil, niebla
