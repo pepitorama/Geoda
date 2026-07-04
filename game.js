@@ -2980,9 +2980,12 @@ function refreshAbilityBar() {
     if (!btn) continue;
     const locked = !abilityUnlocked(a);
     const cd = state.cooldowns[a.id];
+    const maxCd = a.cd * metaCdrMult() * relicCdMult();
     btn.classList.toggle("locked", locked);
     btn.classList.toggle("cooling", !locked && cd > 0);
     btn.classList.toggle("ready", !locked && cd <= 0 && state.running && !state.gameOver);
+    // Fracción restante para el barrido radial (conic-gradient)
+    btn.style.setProperty("--cd", cd > 0 ? clamp(cd / maxCd, 0, 1) : 0);
     btn.querySelector(".cost").textContent = locked ? t("lockedWave", a.unlock) : cd > 0 ? `${Math.ceil(cd)}s` : t("ready");
   }
 }

@@ -71,6 +71,7 @@
     transition: transform .12s ease, color .15s;
   }
   #help-btn:hover { transform: scale(1.1); color: var(--text); }
+  #help-btn:active { transform: scale(.9); }
   #speed-btn {
     position: fixed; top: 14px; right: 58px; z-index: 11;
     height: 36px; min-width: 44px; padding: 0 12px; border-radius: 18px;
@@ -80,7 +81,8 @@
     display: none;
   }
   #speed-btn:hover { transform: scale(1.05); color: var(--text); }
-  #speed-btn.fast { color: var(--gold); border-color: rgba(255,201,74,.5); }
+  #speed-btn:active { transform: scale(.92); }
+  #speed-btn.fast { color: var(--gold); border-color: rgba(255,201,74,.5); box-shadow: 0 0 12px rgba(255,201,74,.2); }
 
   /* ---------- Barra inferior ---------- */
   #toolbar {
@@ -100,19 +102,34 @@
     transition: transform .12s ease, border-color .15s ease, background .15s ease;
   }
   .tower-btn:hover, .ability-btn:hover { transform: translateY(-3px); background: rgba(255,255,255,.09); }
-  .tower-btn.selected { border-color: var(--accent); background: rgba(140,120,255,.14); }
+  .tower-btn:active, .ability-btn:active { transform: translateY(-1px) scale(.95); }
+  .tower-btn.selected {
+    border-color: var(--accent); background: rgba(140,120,255,.18);
+    box-shadow: 0 0 0 1px rgba(140,120,255,.35), 0 -3px 14px rgba(140,120,255,.28);
+  }
   .tower-btn.locked, .ability-btn.locked { opacity: .35; cursor: not-allowed; }
+  .tower-btn.cant { opacity: .78; }
   .tower-btn.cant .cost { color: var(--danger); }
-  .tower-btn .gem, .ability-btn .gem { font-size: 21px; line-height: 1.1; filter: drop-shadow(0 0 6px currentColor); }
+  .tower-btn .gem, .ability-btn .gem { font-size: 22px; line-height: 1.1; filter: drop-shadow(0 0 6px currentColor); transition: transform .12s ease; }
+  .tower-btn:hover .gem, .ability-btn:hover .gem { transform: scale(1.12); }
   .tower-btn .name, .ability-btn .name { font-size: 11px; font-weight: 700; margin-top: 2px; }
   .tower-btn .cost, .ability-btn .cost { font-size: 10.5px; color: var(--dim); margin-top: 1px; }
   .tower-btn .key, .ability-btn .key {
-    position: absolute; top: 3px; left: 6px; font-size: 9px; color: var(--dim);
+    position: absolute; top: 3px; left: 5px; font-size: 9px; font-weight: 700;
+    color: var(--dim); background: rgba(255,255,255,.06);
+    border-radius: 4px; padding: 0 3px; line-height: 1.5;
   }
-  .ability-btn { border-color: rgba(82,229,165,.25); }
-  .ability-btn.ready { border-color: rgba(82,229,165,.6); }
+  /* Recarga radial estilo juego (conic-gradient) sobre las habilidades */
+  .ability-btn { border-color: rgba(82,229,165,.28); }
+  .ability-btn::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    pointer-events: none; opacity: 0; transition: opacity .2s;
+    background: conic-gradient(from -90deg, rgba(6,5,16,.6) calc(var(--cd, 0) * 360deg), transparent 0);
+  }
+  .ability-btn.cooling::after { opacity: 1; }
+  .ability-btn.cooling { opacity: .82; }
+  .ability-btn.ready { border-color: rgba(82,229,165,.6); box-shadow: 0 0 12px rgba(82,229,165,.18); }
   .ability-btn.ready .gem { animation: pulse-glow 1.6s infinite; }
-  .ability-btn.cooling { opacity: .45; }
   @keyframes pulse-glow { 50% { filter: drop-shadow(0 0 12px currentColor); } }
   @keyframes shake-x { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
   .shake { animation: shake-x .18s 2; }
