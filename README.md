@@ -1,4 +1,19 @@
-# 💎 GEODA — Defiende el Núcleo · v9 «Edición Profundidad»
+# 💎 GEODA — Defiende el Núcleo · v10 «Edición Horizonte»
+
+Expansión de mapas e interfaz:
+
+- **🗺️ 3 mapas nuevos** (7 en total): **Pilares** (cuatro columnas que crean
+  lanes), **Jardín de cristal** (pocas rocas, muchas vetas) y **Espiral** (un
+  brazo de roca que encauza a las sombras), más la opción **🎲 Aleatorio**.
+- **☠️ Barra de vida del jefe** en la parte superior, con su nombre y fase.
+- **➤ Indicadores de borde**: flechas que señalan a los enemigos que aún no
+  están en pantalla, para saber por dónde vienen.
+- **🃏 Bandeja de reliquias** con iconos en el HUD (antes solo un número).
+- **🔮 Vida del núcleo como número** sobre la barra (p. ej. 100/100).
+- **⚙️ Contador de FPS** opcional en ajustes.
+- Verificado a **51-60 fps** con 5 oleadas y decenas de enemigos, sin errores.
+
+
 
 - **🌳 Rama de mejora profunda**: tras evolucionar al nivel 5, cada torre puede
   **ascender su rama** por 3 niveles más (Tier I → II → III), escalando daño,

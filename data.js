@@ -251,9 +251,24 @@
       name: { es: "Anillo", en: "Ring" },
       desc: { es: "Una muralla circular con tres brechas rodea el núcleo.", en: "A circular wall with three breaches surrounds the core." },
     },
+    pillars: {
+      id: "pillars", icon: "🏛️", sides: [0, 1, 2, 3], score: 1.08,
+      name: { es: "Pilares", en: "Pillars" },
+      desc: { es: "Cuatro grandes columnas de roca dividen el campo en lanes.", en: "Four great rock pillars split the field into lanes." },
+    },
+    garden: {
+      id: "garden", icon: "🌿", sides: [0, 1, 2, 3], score: 0.95,
+      name: { es: "Jardín de cristal", en: "Crystal Garden" },
+      desc: { es: "Pocas rocas y muchas vetas de poder. Terreno generoso.", en: "Few rocks and many power veins. Generous ground." },
+    },
+    spiral: {
+      id: "spiral", icon: "🌀", sides: [0, 1, 2, 3], score: 1.12,
+      name: { es: "Espiral", en: "Spiral" },
+      desc: { es: "Un brazo de roca en espiral encauza a las sombras. +12% puntuación.", en: "A spiral rock arm channels the shadows. +12% score." },
+    },
   };
   // El Anillo es exclusivo de la campaña: no aparece en el selector
-  const LAYOUT_ORDER = ["cavern", "gorge", "archipelago", "void"];
+  const LAYOUT_ORDER = ["cavern", "gorge", "archipelago", "void", "pillars", "garden", "spiral"];
 
   // ---------- Campaña ----------
   const CAMPAIGN = [

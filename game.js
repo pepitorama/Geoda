@@ -34,7 +34,7 @@ function loadMeta() {
     totalKills: 0,
     muted: localStorage.getItem("geoda_muted") === "1",
     volume: 1,
-    settings: { shake: true, reduced: false, cb: false, textScale: 1, lang: "es" },
+    settings: { shake: true, reduced: false, cb: false, textScale: 1, lang: "es", showFps: false },
     history: [],
     daily: null,           // { date: "2026-07-03", best: 1234 }
     tutorialDone: false,
@@ -429,6 +429,64 @@ function genTerrain() {
       const x = rr(90, W - 90), y = rr(H * 0.36, H * 0.64);
       if (dist2(x, y, CX, CY) < 150 * 150) continue;
       if (state.spots.some(o => dist2(x, y, o.x, o.y) < 130 * 130)) continue;
+      state.spots.push({ x, y, r: 26, seed: rng() * TAU });
+    }
+    return;
+  }
+
+  if (layout === "pillars") {
+    // Cuatro columnas grandes en diagonales, dejando lanes abiertos
+    const R = Math.min(W, H) * 0.3;
+    for (let i = 0; i < 4; i++) {
+      const a = Math.PI / 4 + i * Math.PI / 2;
+      addRock(CX + Math.cos(a) * R, CY + Math.sin(a) * R, rr(48, 62));
+    }
+    for (let tries = 0; tries < 60 && state.spots.length < 4; tries++) {
+      const ang = rng() * TAU, d = rr(150, Math.min(W, H) * 0.42);
+      const x = clamp(CX + Math.cos(ang) * d, 70, W - 70), y = clamp(CY + Math.sin(ang) * d, 90, H - 150);
+      if (state.spots.some(o => dist2(x, y, o.x, o.y) < 130 * 130)) continue;
+      if (state.rocks.some(o => dist2(x, y, o.x, o.y) < (o.r + 50) * (o.r + 50))) continue;
+      state.spots.push({ x, y, r: 26, seed: rng() * TAU });
+    }
+    return;
+  }
+
+  if (layout === "garden") {
+    // Terreno generoso: pocas rocas, muchas vetas de poder
+    const nr = 2 + Math.floor(rng() * 2);
+    for (let tries = 0; tries < 60 && state.rocks.length < nr; tries++) {
+      const r = rr(28, 46);
+      const x = rr(90, W - 90), y = rr(110, H - 160);
+      if (dist2(x, y, CX, CY) < (220 + r) * (220 + r)) continue;
+      if (state.rocks.some(o => dist2(x, y, o.x, o.y) < (r + o.r + 90) * (r + o.r + 90))) continue;
+      addRock(x, y, r);
+    }
+    for (let tries = 0; tries < 120 && state.spots.length < 7; tries++) {
+      const x = rr(80, W - 80), y = rr(100, H - 160);
+      if (dist2(x, y, CX, CY) < 140 * 140) continue;
+      if (dist2(x, y, CX, CY) > Math.pow(Math.min(W, H) * 0.5, 2)) continue;
+      if (state.spots.some(o => dist2(x, y, o.x, o.y) < 110 * 110)) continue;
+      if (state.rocks.some(o => dist2(x, y, o.x, o.y) < (o.r + 50) * (o.r + 50))) continue;
+      state.spots.push({ x, y, r: 26, seed: rng() * TAU });
+    }
+    return;
+  }
+
+  if (layout === "spiral") {
+    // Brazo de roca en espiral alrededor del núcleo
+    let ang = rng() * TAU;
+    let r = 140;
+    while (r < Math.min(W, H) * 0.48) {
+      const x = CX + Math.cos(ang) * r, y = CY + Math.sin(ang) * r;
+      if (x > 60 && x < W - 60 && y > 90 && y < H - 140) addRock(x, y, rr(24, 34));
+      ang += 0.55;
+      r += 26;
+    }
+    for (let tries = 0; tries < 80 && state.spots.length < 4; tries++) {
+      const a2 = rng() * TAU, d = rr(150, Math.min(W, H) * 0.4);
+      const x = clamp(CX + Math.cos(a2) * d, 70, W - 70), y = clamp(CY + Math.sin(a2) * d, 90, H - 150);
+      if (state.spots.some(o => dist2(x, y, o.x, o.y) < 120 * 120)) continue;
+      if (state.rocks.some(o => dist2(x, y, o.x, o.y) < (o.r + 46) * (o.r + 46))) continue;
       state.spots.push({ x, y, r: 26, seed: rng() * TAU });
     }
     return;
@@ -2242,6 +2300,80 @@ function render() {
   drawVignette();
 
   ctx.restore();
+
+  // Overlays en espacio de pantalla (sin sacudida): barra de jefe e indicadores
+  if (state.running && !state.gameOver) {
+    drawEdgeIndicators();
+    drawBossBar();
+  }
+  if (meta.settings.showFps) {
+    ctx.fillStyle = fpsEma < 45 ? "#ff5470" : "rgba(154,146,201,0.9)";
+    ctx.font = "700 11px 'Segoe UI', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(`${Math.round(fpsEma)} FPS`, 12, H - 12);
+  }
+}
+
+function drawBossBar() {
+  let boss = null;
+  for (const e of state.enemies) {
+    if (e.shape === "boss" && !e.dead && (!boss || e.maxHp > boss.maxHp)) boss = e;
+  }
+  if (!boss) return;
+  const w = Math.min(360, W * 0.5), h = 12, x = (W - w) / 2, y = 84;
+  const frac = clamp(boss.hp / boss.maxHp, 0, 1);
+  ctx.fillStyle = "rgba(18,16,34,0.9)";
+  ctx.strokeStyle = "rgba(255,84,112,0.5)";
+  ctx.lineWidth = 1.5;
+  roundRect(x - 3, y - 3, w + 6, h + 6, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  roundRect(x, y, w, h, 4); ctx.fill();
+  const g = ctx.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, boss.mega ? "#ff2255" : "#ff5470");
+  g.addColorStop(1, "#ff9a3c");
+  ctx.fillStyle = g;
+  roundRect(x, y, w * frac, h, 4); ctx.fill();
+  const nm = boss.bossKind ? tn(D.BOSS_KINDS[boss.bossKind].name) : (boss.mega ? (L() === "en" ? "Mega-Boss" : "Mega-Jefe") : (L() === "en" ? "Boss" : "Jefe"));
+  ctx.fillStyle = "#e8e4ff";
+  ctx.font = "700 12px 'Segoe UI', sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`${boss.mega ? "💀" : "☠"} ${nm}${boss.phase ? "  ·  " + (L() === "en" ? "Phase " : "Fase ") + (boss.phase + 1) : ""}`, W / 2, y - 8);
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawEdgeIndicators() {
+  if (state.phase !== "wave") return;
+  const m = 26;
+  let shown = 0;
+  for (const e of state.enemies) {
+    if (e.dead || shown > 14) continue;
+    if (e.x >= -8 && e.x <= W + 8 && e.y >= -8 && e.y <= H + 8) continue; // ya visible
+    shown++;
+    const cx = clamp(e.x, m, W - m), cy = clamp(e.y, m, H - m);
+    const ang = Math.atan2(e.y - cy, e.x - cx);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(ang);
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = e.shape === "boss" ? "#ff3355" : enemyColor(e);
+    ctx.beginPath();
+    ctx.moveTo(8, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawEditor() {
@@ -3055,10 +3187,14 @@ function updateHUD() {
   uiScore.textContent = state.score;
   uiFrags.textContent = meta.fragments;
   uiRelicsWrap.style.display = state.relics.length ? "flex" : "none";
-  uiRelics.textContent = state.relics.length;
+  // Bandeja de reliquias con iconos (hasta 8, luego un +N)
+  const icons = state.relics.slice(0, 8).map(id => D.RELICS[id].icon).join("");
+  uiRelics.textContent = icons + (state.relics.length > 8 ? `+${state.relics.length - 8}` : "");
   uiRelicsWrap.title = state.relics.map(id => `${D.RELICS[id].icon} ${tn(D.RELICS[id].name)}`).join(" · ");
   const frac = clamp(state.coreHp / state.coreMaxHp, 0, 1);
   coreBar.style.width = `${frac * 100}%`;
+  const hpNum = document.getElementById("core-hp-num");
+  if (hpNum) hpNum.textContent = `${Math.max(0, Math.ceil(state.coreHp))}/${state.coreMaxHp}`;
   coreBar.style.background = frac > 0.5
     ? "linear-gradient(90deg, #52e5a5, #4ad9e8)"
     : frac > 0.25
@@ -3442,6 +3578,7 @@ function buildSettings() {
   mkSwitch(t("sShake"), "shake");
   mkSwitch(t("sReduced"), "reduced");
   mkSwitch(t("sCb"), "cb");
+  mkSwitch(L() === "en" ? "FPS counter" : "Contador de FPS", "showFps");
 
   const rowT = document.createElement("div");
   rowT.className = "set-row";
@@ -3542,16 +3679,19 @@ function buildDifficultyRow() {
 function buildLayoutRow() {
   const row = document.getElementById("layout-row");
   row.innerHTML = "";
-  for (const key of D.LAYOUT_ORDER) {
+  const opts = D.LAYOUT_ORDER.concat(["random"]);
+  for (const key of opts) {
     const lay = D.LAYOUTS[key];
     const btn = document.createElement("button");
     btn.className = "diff-btn" + (menuLayout === key ? " selected" : "");
     btn.style.color = menuLayout === key ? "var(--accent)" : "";
-    btn.textContent = `${lay.icon} ${tn(lay.name)}`;
+    btn.textContent = key === "random" ? `🎲 ${L() === "en" ? "Random" : "Aleatorio"}` : `${lay.icon} ${tn(lay.name)}`;
     btn.addEventListener("click", () => { menuLayout = key; buildLayoutRow(); updateRecordRow(); });
     row.appendChild(btn);
   }
-  document.getElementById("layout-desc").textContent = tn(D.LAYOUTS[menuLayout].desc);
+  document.getElementById("layout-desc").textContent = menuLayout === "random"
+    ? (L() === "en" ? "A random map each run." : "Un mapa al azar en cada partida.")
+    : tn(D.LAYOUTS[menuLayout].desc);
 }
 
 function recordKey(diffKey, layoutKey, daily) {
@@ -3843,7 +3983,12 @@ function resetGame(difficulty, opts) {
   else setTutStep(0);
 }
 
-document.getElementById("start-btn").addEventListener("click", () => { ensureAudio(); deleteSave(); resetGame(undefined, { ascension: menuAscension }); });
+document.getElementById("start-btn").addEventListener("click", () => {
+  ensureAudio();
+  deleteSave();
+  const layout = menuLayout === "random" ? pick(D.LAYOUT_ORDER) : menuLayout;
+  resetGame(undefined, { ascension: menuAscension, layout });
+});
 document.getElementById("asc-minus").addEventListener("click", () => { menuAscension = clamp(menuAscension - 1, 0, meta.ascension); updateAscRow(); });
 document.getElementById("asc-plus").addEventListener("click", () => { menuAscension = clamp(menuAscension + 1, 0, meta.ascension); updateAscRow(); });
 document.getElementById("daily-btn").addEventListener("click", () => {
