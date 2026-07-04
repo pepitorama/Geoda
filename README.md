@@ -1,4 +1,19 @@
-# 💎 GEODA — Defiende el Núcleo · v7 «Edición Centinela»
+# 💎 GEODA — Defiende el Núcleo · v8 «Edición Leyenda»
+
+Mecánicas inspiradas en los grandes del género (Kingdom Rush, Bloons TD 6,
+Plants vs Zombies):
+
+- **🛡️ El Centinela sube de nivel** como un héroe: gana experiencia con cada
+  baja y escala hasta el nivel 5, aumentando daño y alcance y acortando la
+  recarga de su nova (progresión de héroe estilo Bloons/Kingdom Rush).
+- **❤️‍🔥 Reliquia Núcleo Fénix**: una red de seguridad única — cuando el
+  núcleo caería, revive al 35% y arrasa el mapa con un pulso enorme (como los
+  cortacéspedes de Plants vs Zombies).
+- **◈ Guardián de sombra**: un enemigo de apoyo que **escuda periódicamente a
+  las sombras cercanas** (absorben impactos), obligándote a priorizarlo — el
+  clásico "mata primero al de apoyo" de Kingdom Rush y Bloons.
+
+
 
 Un juego de **defiende tu base** (tower defense) hecho en HTML5 Canvas puro.
 Sin dependencias, sin build: abre `index.html` en el navegador y juega.

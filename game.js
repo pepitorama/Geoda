@@ -1024,6 +1024,7 @@ function damageEnemy(e, dmg, source, opts) {
     meta.totalKills++;
     if (meta.totalKills >= 1000) unlockAchievement("kills");
     unlockAchievement("first");
+    sentinelGainXp();
     state.combo++;
     state.comboTimer = comboWindow();
     const mult = 1 + Math.min(4, Math.floor(state.combo / 5));
@@ -1158,11 +1159,62 @@ function fireShield() {
   state.shockwaves.push({ x: CX, y: CY, r: 34, max: 78, life: 0.8, color: "rgba(110,231,216,1)" });
 }
 
+function triggerPhoenix() {
+  // Rescate único: revive el núcleo y arrasa con un gran pulso
+  state.phoenixReady = false;
+  state.coreHp = Math.round(state.coreMaxHp * 0.35);
+  state.corePulse = 1;
+  state.shake = 22;
+  sfx.over();
+  addText(CX, CY - 60, "❤️‍🔥 ¡NÚCLEO FÉNIX!", "#ff9a3c", 20);
+  state.shockwaves.push({ x: CX, y: CY, r: 34, max: 420, life: 1.1, color: "rgba(255,154,60,1)" });
+  burst(CX, CY, "#ff9a3c", 70, 8);
+  const R = 420;
+  forEnemiesNear(CX, CY, R, (e) => {
+    if (e.dead || e.burrowed) return;
+    if (dist2(e.x, e.y, CX, CY) < R * R) {
+      damageEnemy(e, 120, null, { tag: "abilities" });
+      const d = Math.sqrt(dist2(e.x, e.y, CX, CY)) || 1;
+      e.x += ((e.x - CX) / d) * 220;
+      e.y += ((e.y - CY) / d) * 220;
+    }
+  });
+  updateHUD();
+}
+
 function fireOverdrive() {
   state.overUntil = state.time + 6;
   sfx.over();
   addText(CX, CY - 64, t("overdrive"), "#ff9a3c", 18);
   for (const tw of state.towers) burst(tw.x, tw.y, "#ff9a3c", 6, 2);
+}
+
+function sentinelStats() {
+  const S = D.SENTINEL;
+  const lv = state.sentinel ? state.sentinel.level : 0;
+  return {
+    dmg: S.dmg * (1 + S.dmgPerLvl * lv),
+    range: S.range * (1 + S.rangePerLvl * lv),
+    rate: S.rate * (1 - S.ratePerLvl * lv),
+    novaCd: Math.max(6, S.novaCd - S.novaCdPerLvl * lv),
+    novaDmg: S.novaDmg * (1 + S.dmgPerLvl * lv),
+  };
+}
+
+function sentinelGainXp() {
+  const sen = state.sentinel;
+  if (!sen) return;
+  sen.xp++;
+  const th = D.SENTINEL.levelXp;
+  let lvl = 0;
+  for (let i = 0; i < th.length; i++) if (sen.xp >= th[i]) lvl = i + 1;
+  if (lvl > sen.level) {
+    sen.level = lvl;
+    addText(sen.x, sen.y - 24, `Centinela Nv.${lvl + 1}`, "#7dfcff", 14);
+    burst(sen.x, sen.y, "#7dfcff", 20, 4);
+    state.shockwaves.push({ x: sen.x, y: sen.y, r: 6, max: 40, life: 0.5, color: "rgba(125,252,255,1)" });
+    sfx.upgrade();
+  }
 }
 
 function fireNova() {
@@ -1172,14 +1224,15 @@ function fireNova() {
     return;
   }
   const S = D.SENTINEL;
-  sen.novaCd = S.novaCd * relicCdMult();
+  const ss = sentinelStats();
+  sen.novaCd = ss.novaCd * relicCdMult();
   sfx.freeze();
   state.shake = Math.max(state.shake, 6);
   state.shockwaves.push({ x: sen.x, y: sen.y, r: 6, max: S.novaRadius, life: 0.7, color: S.glow + "1)" });
   burst(sen.x, sen.y, S.color, 26, 5);
   forEnemiesNear(sen.x, sen.y, S.novaRadius, (e) => {
     if (!targetable(e) || dist2(e.x, e.y, sen.x, sen.y) > S.novaRadius * S.novaRadius) return;
-    damageEnemy(e, S.novaDmg, null, { tag: "sentinel" });
+    damageEnemy(e, ss.novaDmg, null, { tag: "sentinel" });
     if (!e.slowImmune) { e.slowUntil = state.time + 1.5; e.slowFactor = 0.4; }
   });
   unlockAchievement("guardian");
@@ -1224,6 +1277,7 @@ function applyRelic(id) {
     state.coreMaxHp += 20;
     state.coreHp = Math.min(state.coreMaxHp, state.coreHp + 20);
   }
+  if (id === "phoenix") state.phoenixReady = true;
   updateHUD();
 }
 
@@ -1271,6 +1325,7 @@ function saveGame() {
     difficulty: state.difficulty,
     endless: state.endless,
     relics: state.relics,
+    phoenixReady: state.phoenixReady,
     waveLog: state.waveLog,
     stats: state.stats,
     towers: state.towers.map(tw => ({
@@ -1307,6 +1362,7 @@ function loadGame() {
   state.coreHp = d.coreHp;
   state.endless = !!d.endless;
   state.relics = d.relics || [];
+  state.phoenixReady = !!d.phoenixReady;
   state.waveLog = d.waveLog || [];
   state.stats = { ...freshStats(), ...(d.stats || {}) };
   state.stats.dmgByType = (d.stats && d.stats.dmgByType) || {};
@@ -1466,6 +1522,20 @@ function update(dt) {
       });
     }
 
+    // Guardián de sombra: escuda a los enemigos cercanos (prioriza matarlo)
+    if (e.type === "warden") {
+      if (e.nextShield === undefined) e.nextShield = state.time + 2;
+      if (state.time > e.nextShield) {
+        e.nextShield = state.time + 3;
+        state.shockwaves.push({ x: e.x, y: e.y, r: 6, max: 110, life: 0.6, color: "rgba(201,162,255,0.9)" });
+        forEnemiesNear(e.x, e.y, 110, (o) => {
+          if (o !== e && !o.dead && o.shieldHits <= 0 && dist2(e.x, e.y, o.x, o.y) < 110 * 110) {
+            o.shieldHits = 2;
+          }
+        });
+      }
+    }
+
     // Comportamientos de jefe
     if (e.shape === "boss") {
       if (state.time > e.nextPulse) {
@@ -1548,7 +1618,10 @@ function update(dt) {
         burst(e.x, e.y, "#ff5470", 18, 4);
         addText(CX, CY - 46, `-${e.dmg}`, "#ff5470", 16);
         updateHUD();
-        if (state.coreHp <= 0) { gameOver(); return; }
+        if (state.coreHp <= 0) {
+          if (state.phoenixReady) { triggerPhoenix(); }
+          else { gameOver(); return; }
+        }
       }
     }
   }
@@ -1791,6 +1864,7 @@ function update(dt) {
   if (state.sentinel) {
     const S = D.SENTINEL;
     const sen = state.sentinel;
+    const ss = sentinelStats();
     // Objetivo: el cursor si está sobre el campo y en oleada; si no, reposa junto al núcleo
     let tx = CX, ty = CY - 70;
     const overUI = state.mouseY > H - 120 || state.mouseY < 60;
@@ -1802,12 +1876,12 @@ function update(dt) {
     if (sen.novaCd > 0) sen.novaCd = Math.max(0, sen.novaCd - dt);
     sen.cd -= dt;
     if (sen.cd <= 0) {
-      const tgt = pickTarget({ x: sen.x, y: sen.y, priority: "core" }, S.range);
+      const tgt = pickTarget({ x: sen.x, y: sen.y, priority: "core" }, ss.range);
       if (tgt) {
-        sen.cd = S.rate;
+        sen.cd = ss.rate;
         state.projectiles.push({
           kind: "homing", x: sen.x, y: sen.y, target: tgt,
-          speed: S.projSpeed, dmg: S.dmg, color: S.color, source: null,
+          speed: S.projSpeed, dmg: ss.dmg, color: S.color, source: null,
           slowFactor: 0.7, slowTime: 1, splash: 0, trail: [],
         });
         sfx.shoot();
@@ -2554,6 +2628,27 @@ function drawEnemy(e) {
     ctx.beginPath();
     ctx.arc(0, 0, 90, 0, TAU);
     ctx.stroke();
+  } else if (e.shape === "warden") {
+    // Rombo con núcleo brillante y anillo protector
+    ctx.rotate(state.time * 0.5);
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r * 0.8, 0);
+    ctx.lineTo(0, r);
+    ctx.lineTo(-r * 0.8, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.rotate(-state.time * 0.5);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.3, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(201,162,255,${0.3 + Math.sin(state.time * 3) * 0.15})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 110, 0, TAU);
+    ctx.stroke();
   } else if (e.shape === "digger") {
     ctx.rotate(Math.atan2(CY - e.y, CX - e.x));
     ctx.beginPath();
@@ -2748,7 +2843,7 @@ function drawSentinel() {
     ctx.strokeStyle = S.glow + "0.18)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(sen.x, sen.y, S.range, 0, TAU);
+    ctx.arc(sen.x, sen.y, sentinelStats().range, 0, TAU);
     ctx.stroke();
   }
   // Cuerpo: núcleo brillante + anillo giratorio + satélites
@@ -2784,6 +2879,13 @@ function drawSentinel() {
   } else {
     ctx.fillStyle = "rgba(154,146,201,0.8)";
     ctx.fillText(Math.ceil(sen.novaCd) + "s", sen.x, sen.y + 24);
+  }
+  // Nivel del héroe (pips por encima)
+  for (let i = 0; i < sen.level; i++) {
+    ctx.fillStyle = "#7dfcff";
+    ctx.beginPath();
+    ctx.arc(sen.x + (i - (sen.level - 1) / 2) * 6, sen.y - 20, 1.8, 0, TAU);
+    ctx.fill();
   }
 }
 
@@ -3610,8 +3712,9 @@ function resetGame(difficulty, opts) {
   state.shake = 0;
   state.stats = freshStats();
   state.sentinel = meta.unlocked.sentinel
-    ? { x: CX, y: CY - 70, cd: 0, novaCd: 0, trail: [] }
+    ? { x: CX, y: CY - 70, cd: 0, novaCd: 0, trail: [], level: 0, xp: 0 }
     : null;
+  state.phoenixReady = false;
   genTerrain();
   buildBackdrop();
   hideTowerPopup();

@@ -141,18 +141,19 @@
     ghost: { hp: 34, speed: 62, radius: 12, dmg: 12, bounty: 18, score: 35, color: "#8fd4ff", shape: "ghost" },
     armored: { hp: 130, speed: 26, radius: 16, dmg: 18, bounty: 26, score: 50, color: "#9aa7c7", shape: "armored", slowImmune: true, critImmune: true },
     digger: { hp: 60, speed: 48, radius: 13, dmg: 16, bounty: 20, score: 40, color: "#d8a05c", shape: "digger" },
+    warden: { hp: 90, speed: 32, radius: 15, dmg: 14, bounty: 30, score: 60, color: "#c9a2ff", shape: "warden" },
     boss: { hp: 700, speed: 20, radius: 34, dmg: 60, bounty: 160, score: 400, color: "#ff4a6e", shape: "boss" },
     mega: { hp: 2200, speed: 13, radius: 48, dmg: 100, bounty: 420, score: 1200, color: "#ff2255", shape: "boss", mega: true },
   };
   const ENEMY_ICONS = {
     mote: "●", swift: "▲", brute: "⬢", splitter: "◐", healer: "✚",
-    ghost: "👻", armored: "▣", digger: "⛏", boss: "☠", mega: "💀",
+    ghost: "👻", armored: "▣", digger: "⛏", warden: "◈", boss: "☠", mega: "💀",
   };
   // Paleta alternativa (accesible) para el modo daltónico: Okabe-Ito adaptada
   const ENEMY_COLORS_CB = {
     mote: "#56B4E9", swift: "#E69F00", brute: "#0072B2", splitter: "#CC79A7",
     healer: "#009E73", ghost: "#F0E442", armored: "#999999", digger: "#D55E00",
-    boss: "#E51E32", mega: "#B2182B",
+    warden: "#CC79A7", boss: "#E51E32", mega: "#B2182B",
   };
 
   // ---------- Jefes con identidad (rotación en oleadas 5,15,20…; la 10/20/30 es mega) ----------
@@ -208,6 +209,7 @@
     pyro: { id: "pyro", icon: "🎆", name: { es: "Pirotecnia", en: "Pyrotechnics" }, desc: { es: "Los críticos explotan (50% del daño en área)", en: "Crits explode (50% damage in an area)" } },
     frost: { id: "frost", icon: "🧊", name: { es: "Escarcha eterna", en: "Eternal Frost" }, desc: { es: "Todos los impactos ralentizan un 15%", en: "All hits slow by 15%" } },
     echo: { id: "echo", icon: "🔁", name: { es: "Eco resonante", en: "Resonant Echo" }, desc: { es: "El Pulso se lanza dos veces", en: "Pulse fires twice" } },
+    phoenix: { id: "phoenix", icon: "❤️‍🔥", name: { es: "Núcleo Fénix", en: "Phoenix Core" }, desc: { es: "Una vez por partida, revive al núcleo al 35% y arrasa con un gran pulso", en: "Once per run, revives the core to 35% and unleashes a huge pulse" } },
   };
   const RELIC_INTERVAL = 3;
 
@@ -303,6 +305,9 @@
     dmg: 11, rate: 0.42, range: 118, projSpeed: 640,
     follow: 6.5,                 // suavizado del seguimiento al cursor
     novaCd: 18, novaDmg: 70, novaRadius: 135,
+    // Progresión de héroe (inspirada en Bloons/Kingdom Rush): sube de nivel con bajas
+    levelXp: [8, 20, 38, 62],    // bajas acumuladas para los niveles 2..5
+    dmgPerLvl: 0.16, rangePerLvl: 0.06, novaCdPerLvl: 1.3, ratePerLvl: 0.05,
     color: "#7dfcff", glow: "rgba(125,252,255,",
     name: { es: "Centinela", en: "Sentinel" },
     desc: {
@@ -403,6 +408,7 @@
       if (n >= 6) add("ghost", n / 3);
       if (n >= 7) add("armored", n / 3);
       if (n >= 8) add("digger", n / 4);
+      if (n >= 9) add("warden", 1 + Math.floor(n / 8));
     }
     return c;
   }
