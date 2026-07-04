@@ -1,4 +1,22 @@
-# 💎 GEODA — Defiende el Núcleo · v8 «Edición Leyenda»
+# 💎 GEODA — Defiende el Núcleo · v9 «Edición Profundidad»
+
+- **🌳 Rama de mejora profunda**: tras evolucionar al nivel 5, cada torre puede
+  **ascender su rama** por 3 niveles más (Tier I → II → III), escalando daño,
+  alcance y cadencia e intensificando el efecto de la rama (el Bífido pasa de 2
+  a 4 objetivos, el Superconductor encadena más, etc.). Ocho pasos de mejora
+  por torre con una bifurcación: pocas super-torres muy caras.
+- **☠️ Jefes con fases**: al 66% y al 33% de vida, los jefes **se intensifican**
+  — aceleran, invocan y sueltan una **ráfaga radial de proyectiles** que dañan
+  al núcleo si le alcanzan (bullet-hell suave).
+- **🕳️ Dificultad Abismo**: una 4ª dificultad **brutal** (enemigos con +85% de
+  vida) que *exige* dominar la rama profunda, las habilidades y las reliquias.
+- **⚖️ Balance verificado**: cada tier cuesta caro para mantener el DPS por 💎
+  ~constante (nada de poder gratis), y el endurecimiento de enemigos está
+  ajustado con `tools/balance-sim.js` para que el margen nunca baje de 1 en las
+  dificultades normales. Relajado/Normal siguen accesibles; Pesadilla exigente;
+  Abismo al límite.
+
+
 
 Mecánicas inspiradas en los grandes del género (Kingdom Rush, Bloons TD 6,
 Plants vs Zombies):

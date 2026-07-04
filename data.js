@@ -32,6 +32,7 @@
     relajado: { name: { es: "Relajado", en: "Relaxed" }, hp: 0.75, speed: 0.9, bounty: 1.2, score: 0.7, color: "#52e5a5" },
     normal: { name: { es: "Normal", en: "Normal" }, hp: 1, speed: 1, bounty: 1, score: 1, color: "#8c78ff" },
     pesadilla: { name: { es: "Pesadilla", en: "Nightmare" }, hp: 1.45, speed: 1.12, bounty: 0.85, score: 1.6, color: "#ff5470" },
+    abismo: { name: { es: "Abismo", en: "Abyss" }, hp: 1.85, speed: 1.18, bounty: 0.85, score: 2.6, color: "#ff2f6a" },
   };
 
   // ---------- Torres ----------
@@ -82,6 +83,16 @@
     },
   };
   const TOWER_ORDER = ["ruby", "sapphire", "emerald", "amethyst", "amber", "diamond", "opal", "obsidian"];
+
+  // ---------- Ramas de mejora (tras evolucionar: Tier I → II → III) ----------
+  // Diseño de balance: cada tier sube stats Y coste de forma que el DPS por 💎
+  // se mantiene ~constante; concentra poder (pocas super-torres) sin poder gratis.
+  const EVO_TIER = {
+    maxTier: 3,
+    cost: [0, 250, 450, 750],  // [_, TierI(evolución), TierII, TierIII]
+    dmgPer: 0.38, rangePer: 0.05, ratePer: 0.06,
+    roman: ["", "I", "II", "III"],
+  };
 
   // ---------- Evoluciones (nivel máximo → especialización) ----------
   const EVOLUTION_COST = 250;
@@ -379,10 +390,10 @@
     critMult: 2,
     vetKillsPerStep: 10, vetStepBonus: 0.02, vetCap: 0.2,
     levelDmg: 0.35, levelRange: 0.08, levelRate: 0.88,
-    // Lineal hasta la victoria; superlineal en el modo infinito para que
-    // el final de cada partida sin fin llegue de verdad (ajustado con
-    // tools/balance-sim.js).
-    hpMultiplier: (n) => 1 + (n - 1) * 0.22 + (n > 25 ? Math.pow(n - 25, 1.5) * 0.05 : 0),
+    // Lineal, con un endurecimiento tardío (n>12) para que la rama profunda
+    // sea necesaria en el final, y superlineal en el modo infinito. Ajustado
+    // con tools/balance-sim.js para mantener el margen por encima de 1.
+    hpMultiplier: (n) => 1 + (n - 1) * 0.22 + (n > 12 ? (n - 12) * 0.05 : 0) + (n > 25 ? Math.pow(n - 25, 1.5) * 0.05 : 0),
     fragmentsEarned: (wave, score) => wave * 3 + Math.floor(score / 250),
     powerSpotBonus: 1.25,
   };
@@ -439,6 +450,7 @@
       chartTitle: "Daño por oleada", chartTaken: "daño recibido", chartDealt: "daño infligido",
       dmgByTower: "Daño por tipo de torre",
       mutatorNext: "Mutador", eliteTag: "Élite",
+      tierUp: (r, c) => `⬆ Rama Tier ${r} (${c} 💎)`, tierMax: "Rama al máximo", tierLbl: "Tier",
       evolveTitle: "⬆ Evolucionar", evolveFor: (c) => `Evolucionar (${c} 💎)`,
       upgradeFor: (c) => `⬆ Mejorar (${c} 💎)`, maxLevel: "Nivel máximo",
       sellFor: (c) => `🗑 Vender (+${c} 💎)`, prio: "🎯",
@@ -534,6 +546,7 @@
       chartTitle: "Damage per wave", chartTaken: "damage taken", chartDealt: "damage dealt",
       dmgByTower: "Damage by tower type",
       mutatorNext: "Mutator", eliteTag: "Elite",
+      tierUp: (r, c) => `⬆ Branch Tier ${r} (${c} 💎)`, tierMax: "Branch maxed", tierLbl: "Tier",
       evolveTitle: "⬆ Evolve", evolveFor: (c) => `Evolve (${c} 💎)`,
       upgradeFor: (c) => `⬆ Upgrade (${c} 💎)`, maxLevel: "Max level",
       sellFor: (c) => `🗑 Sell (+${c} 💎)`, prio: "🎯",
@@ -619,7 +632,7 @@
     BOSS_KINDS, BOSS_ROTATION, bossKindForWave,
     ELITE_AFFIXES, MUTATORS, MUTATOR_CHANCE, MUTATOR_MIN_WAVE,
     RELICS, RELIC_INTERVAL, LAYOUTS, LAYOUT_ORDER,
-    CAMPAIGN, STAR_THRESHOLDS, STAR_REWARD, ASCENSION, SENTINEL,
+    CAMPAIGN, STAR_THRESHOLDS, STAR_REWARD, ASCENSION, SENTINEL, EVO_TIER,
     ABILITIES, SHOP, shopCost, ACHIEVEMENTS,
     ECON, waveComposition, STRINGS,
   };

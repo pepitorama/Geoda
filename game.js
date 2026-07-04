@@ -747,6 +747,11 @@ function spawnSplitChildren(parent) {
 const towerCost = (type) => Math.round(D.TOWER_TYPES[type].cost * metaCostMult() * relicCostMult());
 const upgradeCostOf = (tw) => Math.round(ECON.upgradeCost(D.TOWER_TYPES[tw.type].cost, tw.level) * metaCostMult() * relicCostMult());
 const evolveCost = () => Math.round(D.EVOLUTION_COST * metaCostMult() * relicCostMult());
+const tierUpCost = (tw) => Math.round(D.EVO_TIER.cost[(tw.evoTier || 1) + 1] * metaCostMult() * relicCostMult());
+const canTierUp = (tw) => tw.evo && (tw.evoTier || 1) < D.EVO_TIER.maxTier;
+// Multiplicador de daño por tier de rama (Tier I = 1.0, II/III escalan)
+const tierDmgMult = (tw) => tw.evo ? 1 + D.EVO_TIER.dmgPer * ((tw.evoTier || 1) - 1) : 1;
+const tierT = (tw) => tw.evo ? (tw.evoTier || 1) : 0;   // 0 sin evolucionar, 1-3 con rama
 const vetMult = (tw) => 1 + Math.min(ECON.vetCap, Math.floor(tw.kills / ECON.vetKillsPerStep) * ECON.vetStepBonus);
 
 // Sinergias de adyacencia: cada tipo vecino único aporta su bonificación
@@ -775,12 +780,13 @@ function towerStats(tw) {
   const base = D.TOWER_TYPES[tw.type];
   const lv = tw.level;
   const syn = synergyFor(tw);
-  let dmg = (base.dmg || 0) * (1 + ECON.levelDmg * lv) * vetMult(tw) * metaDmgMult() * relicDmgMult() * syn.dmg;
+  const tT = tierT(tw);
+  let dmg = (base.dmg || 0) * (1 + ECON.levelDmg * lv) * vetMult(tw) * metaDmgMult() * relicDmgMult() * syn.dmg * tierDmgMult(tw);
   if (tw.empowered) dmg *= ECON.powerSpotBonus;
-  let range = base.range * (1 + ECON.levelRange * lv) * relicRangeMult() * syn.range;
+  let range = base.range * (1 + ECON.levelRange * lv) * relicRangeMult() * syn.range * (1 + D.EVO_TIER.rangePer * Math.max(0, tT - 1));
   if (tw.evo === "ballista") range *= 1.3;
   if (state.mutator && state.mutator.towerRange) range *= state.mutator.towerRange;
-  let rate = (base.rate || 1) * Math.pow(ECON.levelRate, lv) * syn.rate;
+  let rate = (base.rate || 1) * Math.pow(ECON.levelRate, lv) * syn.rate * Math.pow(1 - D.EVO_TIER.ratePer, Math.max(0, tT - 1));
   // Aura del Ópalo: se aplica el ópalo más fuerte que alcance a esta torre
   if (!base.support) {
     let bestDmg = 0, bestRate = 0, bestRange = 0;
@@ -864,7 +870,8 @@ function placeTower(x, y) {
 function tryUpgrade(tw) {
   if (tw.level >= MAX_LEVEL) {
     if (!tw.evo) { openEvolvePopup(tw); return; }
-    addText(tw.x, tw.y - 24, t("maxLevel"), "#9a92c9", 13);
+    if (canTierUp(tw)) { tierUpTower(tw); return; }
+    addText(tw.x, tw.y - 24, t("tierMax"), "#9a92c9", 13);
     sfx.error();
     return;
   }
@@ -896,12 +903,33 @@ function evolveTower(tw, evoId) {
   state.energy -= cost;
   tw.invested += cost;
   tw.evo = evoId;
+  tw.evoTier = 1;
   tw.flash = 1;
   sfx.evolve();
   burst(tw.x, tw.y, "#ffffff", 30, 5);
   state.shockwaves.push({ x: tw.x, y: tw.y, r: 6, max: 70, life: 0.7, color: D.TOWER_TYPES[tw.type].color });
   const evo = D.EVOLUTIONS[tw.type].find(e => e.id === evoId);
   addText(tw.x, tw.y - 26, `${evo.icon} ${tn(evo.name)}`, "#ffc94a", 15);
+  refreshToolbar();
+  updateHUD();
+  return true;
+}
+
+function tierUpTower(tw) {
+  if (!canTierUp(tw)) { sfx.error(); return false; }
+  const cost = tierUpCost(tw);
+  if (state.energy < cost) {
+    addText(tw.x, tw.y - 24, t("needN", cost), "#ff5470", 13);
+    sfx.error();
+    return false;
+  }
+  state.energy -= cost;
+  tw.invested += cost;
+  tw.evoTier = (tw.evoTier || 1) + 1;
+  tw.flash = 1;
+  sfx.evolve();
+  burst(tw.x, tw.y, "#ffffff", 24, 4);
+  addText(tw.x, tw.y - 26, `${t("tierLbl")} ${D.EVO_TIER.roman[tw.evoTier]}`, "#ffc94a", 15);
   refreshToolbar();
   updateHUD();
   return true;
@@ -1331,7 +1359,7 @@ function saveGame() {
     towers: state.towers.map(tw => ({
       type: tw.type, dx: tw.x - CX, dy: tw.y - CY,
       level: tw.level, kills: tw.kills, invested: tw.invested,
-      priority: tw.priority, evo: tw.evo,
+      priority: tw.priority, evo: tw.evo, evoTier: tw.evoTier,
     })),
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* sin espacio */ }
@@ -1372,7 +1400,7 @@ function loadGame() {
     return {
       type: tw.type, x, y,
       level: tw.level, kills: tw.kills || 0, invested: tw.invested,
-      priority: tw.priority || "core", evo: tw.evo || null,
+      priority: tw.priority || "core", evo: tw.evo || null, evoTier: tw.evoTier || (tw.evo ? 1 : 0),
       cooldown: 0, angle: rand(0, TAU), flash: 0, buildAnim: 1,
       stunUntil: 0, beamTarget: null, beamTime: 0,
       empowered: !!spotAt(x, y),
@@ -1538,6 +1566,29 @@ function update(dt) {
 
     // Comportamientos de jefe
     if (e.shape === "boss") {
+      // Fases: al 66% y 33% de vida el jefe se intensifica (bullet-hell suave)
+      if (e.phase === undefined) e.phase = 0;
+      const frac = e.hp / e.maxHp;
+      const wantPhase = frac <= 0.33 ? 2 : frac <= 0.66 ? 1 : 0;
+      if (wantPhase > e.phase) {
+        e.phase = wantPhase;
+        e.speed *= 1.18;
+        addText(e.x, e.y - e.radius - 16, "¡FASE " + (e.phase + 1) + "!", "#ff3355", 15);
+        burst(e.x, e.y, "#ff3355", 26, 5);
+        state.shockwaves.push({ x: e.x, y: e.y, r: 10, max: 190, life: 0.7, color: "rgba(255,60,90,1)" });
+        // Ráfaga radial de proyectiles lentos que dañan al núcleo si le alcanzan
+        const n = 6 + e.phase * 3;
+        for (let k = 0; k < n; k++) {
+          const a = (k / n) * TAU + rand(-0.1, 0.1);
+          state.projectiles.push({
+            kind: "bullet", x: e.x, y: e.y,
+            vx: Math.cos(a) * 90, vy: Math.sin(a) * 90,
+            dmg: 8, color: "#ff5470", life: 6, trail: [],
+          });
+        }
+        // Invoca esbirros en cada fase
+        for (let k = 0; k < 2 + e.phase; k++) spawnEnemyAt("mote", e.x + rand(-30, 30), e.y + rand(-30, 30));
+      }
       if (state.time > e.nextPulse) {
         e.nextPulse = state.time + 6;
         state.shockwaves.push({ x: e.x, y: e.y, r: 10, max: 170, life: 0.8, color: "rgba(120,40,120,1)" });
@@ -1700,7 +1751,8 @@ function update(dt) {
       if (tgt) tw.angle = Math.atan2(tgt.y - tw.y, tgt.x - tw.x);
       continue;
     }
-    const targets = pickTargets(tw, st.range, tw.evo === "twin" ? 2 : (def.mortar ? 8 : 1));
+    const twinN = tw.evo === "twin" ? (tw.evoTier >= 3 ? 4 : tw.evoTier >= 2 ? 3 : 2) : 1;
+    const targets = pickTargets(tw, st.range, tw.evo === "twin" ? twinN : (def.mortar ? 8 : 1));
     if (!targets.length) continue;
     tw.angle = Math.atan2(targets[0].y - tw.y, targets[0].x - tw.x);
     tw.cooldown = st.rate;
@@ -1725,7 +1777,7 @@ function update(dt) {
     if (def.chain) {
       // Rayo encadenado (Amatista)
       const isSuper = tw.evo === "super";
-      const maxChain = isSuper ? 7 : def.chain;
+      const maxChain = isSuper ? 7 + (tw.evoTier - 1) * 2 : def.chain;
       const falloff = isSuper ? 1 : 0.72;
       const pts = [{ x: tw.x, y: tw.y }];
       const hitSet = new Set();
@@ -1783,6 +1835,28 @@ function update(dt) {
 
   // ----- Proyectiles -----
   for (const p of state.projectiles) {
+    if (p.kind === "bullet") {
+      // Ráfaga de jefe: viaja recto y daña al núcleo si le alcanza
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.life -= dt;
+      if (p.life <= 0 || p.x < -20 || p.y < -20 || p.x > W + 20 || p.y > H + 20) { p.dead = true; continue; }
+      if (dist2(p.x, p.y, CX, CY) < (34 + 5) * (34 + 5)) {
+        p.dead = true;
+        if (state.time < state.shieldUntil) { burst(p.x, p.y, "#6ee7d8", 6, 3); continue; }
+        state.coreHp -= p.dmg;
+        state.waveDamageTaken += p.dmg;
+        state.corePulse = 1;
+        state.shake = Math.max(state.shake, 6);
+        sfx.coreHit();
+        burst(p.x, p.y, "#ff5470", 10, 3);
+        updateHUD();
+        if (state.coreHp <= 0) {
+          if (state.phoenixReady) triggerPhoenix();
+          else { gameOver(); return; }
+        }
+      }
+      continue;
+    }
     if (p.kind === "mortar") {
       p.t += dt / p.dur;
       const tt = Math.min(1, p.t);
@@ -2427,6 +2501,11 @@ function drawTower(tw) {
     ctx.font = "11px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(evo ? evo.icon : "✦", tw.x, tw.y - 26);
+    if ((tw.evoTier || 1) > 1) {
+      ctx.font = "700 9px 'Segoe UI', sans-serif";
+      ctx.fillStyle = "#ffc94a";
+      ctx.fillText(D.EVO_TIER.roman[tw.evoTier], tw.x + 12, tw.y - 24);
+    }
   }
   if (vetMult(tw) > 1.1) {
     ctx.font = "10px sans-serif";
@@ -2789,6 +2868,20 @@ function drawGem(g) {
 }
 
 function drawProjectile(p) {
+  if (p.kind === "bullet") {
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 2, 0, TAU);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    return;
+  }
   if (p.kind === "mortar") {
     const tt = Math.min(1, p.t);
     const gx = lerp(p.sx, p.tx, tt), gy = lerp(p.sy, p.ty, tt);
@@ -3147,6 +3240,9 @@ function showTowerPopup(tw) {
   towerPopup.innerHTML = "";
   if (tw.level >= MAX_LEVEL && !tw.evo) {
     mkPopupBtn(t("evolveTitle"), () => openEvolvePopup(tw));
+  } else if (tw.level >= MAX_LEVEL && canTierUp(tw)) {
+    const c = tierUpCost(tw);
+    mkPopupBtn(t("tierUp", D.EVO_TIER.roman[(tw.evoTier || 1) + 1], c), () => { tierUpTower(tw); if (state.towers.includes(tw)) showTowerPopup(tw); }, state.energy < c);
   } else if (tw.level < MAX_LEVEL) {
     const c = upgradeCostOf(tw);
     mkPopupBtn(t("upgradeFor", c), () => { tryUpgrade(tw); if (state.towers.includes(tw)) showTowerPopup(tw); }, state.energy < c);
@@ -3186,10 +3282,10 @@ canvas.addEventListener("mousemove", (ev) => {
     const def = D.TOWER_TYPES[tw.type];
     const st = towerStats(tw);
     const up = tw.level >= MAX_LEVEL
-      ? (tw.evo ? t("maxLevel") : t("clickEvolve"))
+      ? (tw.evo ? (canTierUp(tw) ? t("tierUp", D.EVO_TIER.roman[(tw.evoTier || 1) + 1], tierUpCost(tw)) : t("tierMax")) : t("clickEvolve"))
       : t("clickUpgrade", upgradeCostOf(tw));
     const vet = vetMult(tw) > 1 ? ` · ★+${Math.round((vetMult(tw) - 1) * 100)}%` : "";
-    const evoStr = tw.evo ? ` · ${D.EVOLUTIONS[tw.type].find(e => e.id === tw.evo).icon}` : "";
+    const evoStr = tw.evo ? ` · ${D.EVOLUTIONS[tw.type].find(e => e.id === tw.evo).icon} ${t("tierLbl")} ${D.EVO_TIER.roman[tw.evoTier || 1]}` : "";
     const synStr = st.syn.list.length
       ? `<div class="row">${t("synergy")}: ${st.syn.list.map(k => D.TOWER_TYPES[k].gem + " " + tn(D.SYNERGIES[k].label)).join(", ")}</div>` : "";
     const empStr = tw.empowered ? `<div class="row">${t("empowered")}</div>` : "";
