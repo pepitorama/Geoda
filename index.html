@@ -93,16 +93,22 @@
 
   /* ---------- Barra inferior ---------- */
   #toolbar {
-    position: fixed; bottom: 14px; left: 0; right: 0; margin: 0 auto; width: fit-content;
-    display: flex; gap: 8px; padding: 9px; align-items: stretch;
+    position: fixed; bottom: 12px; left: 0; right: 0; margin: 0 auto; width: fit-content;
+    display: flex; gap: 10px; padding: 9px 11px; align-items: flex-end;
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 16px; box-shadow: 0 6px 30px rgba(0,0,0,.55);
     max-width: 97vw; flex-wrap: wrap; justify-content: center; z-index: 10;
   }
-  .tb-divider { width: 1px; background: var(--border); margin: 4px 3px; }
+  .tb-group { display: flex; flex-direction: column; gap: 3px; }
+  .tb-group .tb-label {
+    font-size: 8.5px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--dim); text-align: center; opacity: .7; padding-left: 2px;
+  }
+  .tb-group .tb-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .tb-group.abilities { border-left: 1px solid var(--border); padding-left: 12px; }
   .tower-btn, .ability-btn {
     pointer-events: auto; cursor: pointer; position: relative;
-    width: 72px; padding: 7px 4px 6px;
+    width: 68px; padding: 6px 4px 5px;
     background: rgba(255,255,255,.04);
     border: 2px solid transparent; border-radius: 12px;
     text-align: center; color: var(--text);
@@ -445,10 +451,10 @@
     font-family: inherit;
   }
 
-  @media (max-width: 900px) {
-    #next-wave-btn { bottom: 218px; }
-    #wave-preview { bottom: 266px; }
-    #tutorial { bottom: 320px; }
+  /* En pantallas estrechas los grupos se apilan; el separador pasa a superior.
+     La posición vertical del botón de oleada la ajusta layoutBottomUI() en JS. */
+  @media (max-width: 1000px) {
+    .tb-group.abilities { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 6px; margin-top: 3px; }
   }
 </style>
 </head>

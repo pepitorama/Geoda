@@ -155,6 +155,7 @@ function resize() {
   CX = W / 2;
   CY = H / 2;
   buildBackdrop();
+  if (typeof layoutBottomUI === "function") layoutBottomUI();
 }
 window.addEventListener("resize", resize);
 
@@ -1480,6 +1481,7 @@ function setTutStep(n) {
   if (!n || n > 4) { box.style.display = "none"; return; }
   box.innerHTML = `${t("tut" + n)}<br><span class="tut-skip" id="tut-skip">${t("tutSkip")}</span>`;
   box.style.display = "block";
+  layoutBottomUI();
   document.getElementById("tut-skip").addEventListener("click", () => {
     meta.tutorialDone = true;
     metaSave();
@@ -3236,6 +3238,16 @@ const abilityBtns = {};
 function buildToolbar() {
   toolbar.innerHTML = "";
   for (const key of Object.keys(towerBtns)) delete towerBtns[key];
+  for (const key of Object.keys(abilityBtns)) delete abilityBtns[key];
+
+  // Grupo de torres, con etiqueta y fila propia (envuelve centrado)
+  const towerGroup = document.createElement("div");
+  towerGroup.className = "tb-group towers";
+  towerGroup.innerHTML = `<div class="tb-label">${t("towersLbl")}</div>`;
+  const towerRow = document.createElement("div");
+  towerRow.className = "tb-row";
+  towerGroup.appendChild(towerRow);
+
   visibleTowers().forEach((type, i) => {
     const def = D.TOWER_TYPES[type];
     const btn = document.createElement("div");
@@ -3255,13 +3267,18 @@ function buildToolbar() {
     });
     btn.addEventListener("mousemove", (ev) => positionTooltip(ev.clientX, ev.clientY));
     btn.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
-    toolbar.appendChild(btn);
+    towerRow.appendChild(btn);
     towerBtns[type] = btn;
   });
+  toolbar.appendChild(towerGroup);
 
-  const div = document.createElement("div");
-  div.className = "tb-divider";
-  toolbar.appendChild(div);
+  // Grupo de poderes
+  const abilityGroup = document.createElement("div");
+  abilityGroup.className = "tb-group abilities";
+  abilityGroup.innerHTML = `<div class="tb-label">${t("powersLbl")}</div>`;
+  const abilityRow = document.createElement("div");
+  abilityRow.className = "tb-row";
+  abilityGroup.appendChild(abilityRow);
 
   for (const a of D.ABILITIES) {
     const btn = document.createElement("div");
@@ -3276,11 +3293,25 @@ function buildToolbar() {
     });
     btn.addEventListener("mousemove", (ev) => positionTooltip(ev.clientX, ev.clientY));
     btn.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
-    toolbar.appendChild(btn);
+    abilityRow.appendChild(btn);
     abilityBtns[a.id] = btn;
   }
+  toolbar.appendChild(abilityGroup);
+
   refreshToolbar();
   refreshAbilityBar();
+  layoutBottomUI();
+}
+
+// Coloca el botón de oleada / vista previa / tutorial por encima de la barra,
+// midiendo su altura real para no solaparse cuando envuelve a varias filas.
+function layoutBottomUI() {
+  const th = toolbar.offsetHeight || 74;
+  const base = th + 24;
+  nextWaveBtn.style.bottom = base + "px";
+  wavePreview.style.bottom = (base + 48) + "px";
+  const tut = document.getElementById("tutorial");
+  if (tut) tut.style.bottom = (base + 104) + "px";
 }
 
 function refreshToolbar() {
@@ -3353,6 +3384,7 @@ function showWavePreview() {
   const mutStr = mut ? ` &nbsp;·&nbsp; <span class="mut">${mut.icon} ${tn(mut.name)}</span>` : "";
   wavePreview.innerHTML = `${t("waveN")} ${next}: &nbsp;${parts.join(" &nbsp;")}${mutStr}`;
   wavePreview.style.display = "block";
+  layoutBottomUI();
 }
 
 // ---------- Popup de torre / evolución ----------
