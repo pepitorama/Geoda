@@ -1,4 +1,21 @@
-# 💎 GEODA — Defiende el Núcleo · v10 «Edición Horizonte»
+# 💎 GEODA — Defiende el Núcleo · v11 «Edición Elementos»
+
+Expansión de combate inspirada en los grandes del género:
+
+- **🕊️ Enemigos voladores (aire/tierra)**: los **espectros** y **segadores**
+  vuelan sobre las rocas y **solo los alcanzan las torres antiaéreas** (Zafiro,
+  Amatista, Ámbar, Diamante) y los poderes. Fuerza a diversificar la build —
+  el clásico del género que faltaba.
+- **💨 Reacciones elementales**: el Zafiro deja **mojado**; si además lo
+  **quema** un Rubí Ígneo, se produce **Vapor** (estallido de área). Combos
+  emergentes que premian pensar la sinergia.
+- **✨ Pase de "jugosidad"**: **cámara lenta** y **destello** al derribar un
+  jefe, **anunciador de rachas** (¡EN RACHA! / ¡IMPARABLE!), y destellos de
+  pantalla en el Pulso y la Nova. El juego se *siente* mejor.
+- **🎯 Nueva prioridad de objetivo "Más lejano"**, además de cercano, fuerte y
+  débil.
+
+
 
 Expansión de mapas e interfaz:
 

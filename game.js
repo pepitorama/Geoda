@@ -113,7 +113,7 @@ const state = {
   beams: [], texts: [], shockwaves: [], timers: [], pools: [],
   waveLog: [],
   combo: 0, comboTimer: 0,
-  time: 0, shake: 0,
+  time: 0, shake: 0, flash: 0, flashColor: "255,255,255", slowmo: 0,
   hoverTower: null, mouseX: 0, mouseY: 0,
   tutStep: 0,
   stats: null,
@@ -353,6 +353,14 @@ function updateParticles(dt) {
 
 function addText(x, y, str, color, size) {
   state.texts.push({ x, y, str, color, size: (size || 14) * meta.settings.textScale, life: 1.2 });
+}
+function flashScreen(color, strength) {
+  if (meta.settings.reduced) return;
+  state.flashColor = color;
+  state.flash = Math.max(state.flash, strength);
+}
+function bigText(str, color) {
+  state.texts.push({ x: CX, y: CY - 90, str, color, size: 34 * meta.settings.textScale, life: 1.1, big: true });
 }
 function addTimer(delay, fn) { state.timers.push({ t: state.time + delay, fn }); }
 
@@ -740,7 +748,7 @@ function makeEnemy(typeName, x, y, opts) {
     score: base.score, color: base.color, shape: base.shape,
     splits: base.splits || 0,
     slowImmune: !!base.slowImmune, critImmune: !!base.critImmune,
-    mega: !!base.mega,
+    mega: !!base.mega, flying: !!base.flying,
     slowUntil: 0, slowFactor: 1, stasisUntil: 0,
     burnUntil: 0, burnDps: 0, burnSrc: null,
     shieldHits: 0, lastShieldHit: 0,
@@ -776,6 +784,10 @@ function makeEnemy(typeName, x, y, opts) {
 }
 
 function spawnEnemy(typeName) {
+  if ((typeName === "wisp" || typeName === "reaper") && !state.flyingHintShown) {
+    state.flyingHintShown = true;
+    showToast("▽", L() === "en" ? "Fliers incoming" : "¡Voladores!", t("flyingHint"));
+  }
   const rng = state.waveRng;
   const sides = D.LAYOUTS[state.layout].sides;
   const side = sides[Math.floor(rng() * sides.length)];
@@ -1007,8 +1019,8 @@ function sellTower(tw) {
   updateHUD();
 }
 
-const PRIORITIES = ["core", "strong", "weak"];
-const prioLabel = (p) => t(p === "core" ? "prioCore" : p === "strong" ? "prioStrong" : "prioWeak");
+const PRIORITIES = ["core", "far", "strong", "weak"];
+const prioLabel = (p) => t(p === "core" ? "prioCore" : p === "far" ? "prioFar" : p === "strong" ? "prioStrong" : "prioWeak");
 
 function cyclePriority(tw) {
   const i = PRIORITIES.indexOf(tw.priority);
@@ -1027,15 +1039,24 @@ function targetable(e) {
   return !e.dead && !e.burrowed && !e.phased && e.spawnAnim > 0.25;
 }
 
+function towerHitsAir(tw) {
+  if (tw.air !== undefined) return tw.air;  // objeto del Centinela u otros
+  const def = D.TOWER_TYPES[tw.type];
+  return !!(def && def.air);
+}
+
 function pickTargets(tw, range, n) {
   const r2 = range * range;
+  const canAir = towerHitsAir(tw);
   const cands = [];
   forEnemiesNear(tw.x, tw.y, range, (e) => {
     if (!targetable(e)) return;
+    if (e.flying && !canAir) return;   // los voladores solo por torres antiaéreas
     if (dist2(tw.x, tw.y, e.x, e.y) > r2) return;
     let val;
     if (tw.priority === "strong") val = -e.hp;
     else if (tw.priority === "weak") val = e.hp;
+    else if (tw.priority === "far") val = -dist2(e.x, e.y, CX, CY);
     else val = dist2(e.x, e.y, CX, CY);
     cands.push([val, e]);
   });
@@ -1075,6 +1096,7 @@ function rollHit(e, base, source, opts) {
     e.burnUntil = state.time + 2;
     e.burnDps = base * 0.25;
     e.burnSrc = source;
+    checkSteam(e);
   }
   // Escarcha eterna
   if (hasRelic("frost") && !e.slowImmune && (state.time > e.slowUntil || e.slowFactor > 0.85)) {
@@ -1083,6 +1105,23 @@ function rollHit(e, base, source, opts) {
   }
   damageEnemy(e, dmg, source, opts);
   return crit;
+}
+
+// Reacción elemental: mojado + fuego = Vapor (estallido de área)
+function checkSteam(e) {
+  if (e.dead) return;
+  if (!(e.wetUntil > state.time)) return;   // mojado activo
+  if (!(e.burnUntil > state.time)) return;  // quemadura activa
+  e.wetUntil = 0;
+  e.burnUntil = 0;
+  const dmg = 30 + state.wave * 3;
+  addText(e.x, e.y - e.radius - 14, t("steam"), "#dff6ff", 13);
+  burst(e.x, e.y, "#dff6ff", 18, 4);
+  state.shockwaves.push({ x: e.x, y: e.y, r: 6, max: 70, life: 0.5, color: "rgba(210,240,255,1)" });
+  sfx.freeze();
+  forEnemiesNear(e.x, e.y, 70, (o) => {
+    if (!o.dead && dist2(o.x, o.y, e.x, e.y) < 70 * 70) damageEnemy(o, dmg, e.burnSrc, { tag: "reactions", noSteam: true });
+  });
 }
 
 function damageEnemy(e, dmg, source, opts) {
@@ -1118,6 +1157,11 @@ function damageEnemy(e, dmg, source, opts) {
     if (mult >= 5) unlockAchievement("combo");
     addScore(e.score * mult);
     if (state.combo % 5 === 0) addText(e.x, e.y - 26, `¡COMBO x${mult}!`, "#ffc94a", 15);
+    // Anunciador de rachas en hitos altos
+    if (state.combo === 15 || state.combo === 20 || state.combo === 25) {
+      bigText(t("streak", state.combo), state.combo >= 25 ? "#ff5470" : "#ffc94a");
+      flashScreen("255,201,74", 0.25);
+    }
     updateComboHUD();
     sfx.death();
     burst(e.x, e.y, e.elite ? "#ffc94a" : enemyColor(e), e.shape === "boss" ? 46 : 14, e.shape === "boss" ? 6 : 3);
@@ -1141,6 +1185,10 @@ function damageEnemy(e, dmg, source, opts) {
       unlockAchievement(e.mega ? "mega" : "boss");
       chainExplosion(e.x, e.y, e.mega ? 10 : 6);
       setBossMusic(false);
+      // Jugosidad: freeze-frame + destello al derribar un jefe
+      state.slowmo = e.mega ? 0.5 : 0.35;
+      flashScreen(e.mega ? "255,60,90" : "255,180,120", 0.55);
+      bigText(e.mega ? "💀 MEGA-JEFE ABATIDO" : "☠ JEFE ABATIDO", "#ffc94a");
     }
     updateHUD();
   }
@@ -1154,7 +1202,7 @@ function explodeMortar(p) {
   sfx.meteor();
   state.shake = Math.max(state.shake, 4);
   forEnemiesNear(p.tx, p.ty, p.splash, (e) => {
-    if (!targetable(e) || dist2(e.x, e.y, p.tx, p.ty) > p.splash * p.splash) return;
+    if (!targetable(e) || e.flying || dist2(e.x, e.y, p.tx, p.ty) > p.splash * p.splash) return;
     rollHit(e, p.dmg, p.source, { syn: p.syn });
     if (p.source && p.source.evo === "seismic" && !e.dead && !e.slowImmune) {
       e.slowUntil = state.time + 2;
@@ -1200,6 +1248,7 @@ function firePulse() {
   state.shockwaves.push({ x: CX, y: CY, r: 34, max: 300, life: 1 });
   sfx.pulse();
   state.shake = 10;
+  flashScreen("140,120,255", 0.3);
   const R = 300;
   forEnemiesNear(CX, CY, R, (e) => {
     if (e.burrowed || e.dead) return;
@@ -1315,6 +1364,7 @@ function fireNova() {
   sen.novaCd = ss.novaCd * relicCdMult();
   sfx.freeze();
   state.shake = Math.max(state.shake, 6);
+  flashScreen("125,252,255", 0.35);
   state.shockwaves.push({ x: sen.x, y: sen.y, r: 6, max: S.novaRadius, life: 0.7, color: S.glow + "1)" });
   burst(sen.x, sen.y, S.color, 26, 5);
   forEnemiesNear(sen.x, sen.y, S.novaRadius, (e) => {
@@ -1502,11 +1552,14 @@ function frame(now) {
   lastTime = now;
   if (dt > 0) fpsEma = fpsEma * 0.95 + (1 / dt) * 0.05;
   if (!meta.settings.reduced) updateFireflies(dt);
+  if (state.flash > 0) state.flash = Math.max(0, state.flash - dt * 3.2);
+  if (state.slowmo > 0) state.slowmo = Math.max(0, state.slowmo - dt);
   if (state.running && !state.gameOver && !state.paused && !state.drafting) {
-    // Avance rápido: varios sub-pasos con dt pequeño → física estable
+    // Cámara lenta (freeze-frame suave) en momentos épicos
+    const scale = state.slowmo > 0 ? 0.32 : 1;
     const steps = state.speed;
     for (let i = 0; i < steps && state.running && !state.gameOver && !state.paused && !state.drafting; i++) {
-      update(dt);
+      update(dt * scale);
     }
   }
   render();
@@ -1692,7 +1745,7 @@ function update(dt) {
     const ang = Math.atan2(dy, dx) + wob * (e.type === "swift" ? 1.4 : 0.6);
     const v = e.speed * slowed * (e.burrowed ? 2.2 : 1);
     let vx = Math.cos(ang) * v, vy = Math.sin(ang) * v;
-    if (!e.burrowed) {
+    if (!e.burrowed && !e.flying) {
       for (const rock of state.rocks) {
         const rd2 = dist2(e.x, e.y, rock.x, rock.y);
         const lim = rock.r + e.radius + 6;
@@ -1970,7 +2023,7 @@ function update(dt) {
         burst(p.x, p.y, p.color, 16, 4);
         state.shockwaves.push({ x: p.x, y: p.y, r: 4, max: p.splash, life: 0.5, color: p.color });
         forEnemiesNear(p.x, p.y, p.splash, (e) => {
-          if (targetable(e) && dist2(e.x, e.y, p.x, p.y) < p.splash * p.splash) {
+          if (targetable(e) && !e.flying && dist2(e.x, e.y, p.x, p.y) < p.splash * p.splash) {
             rollHit(e, p.dmg, p.source, { syn: p.syn });
           }
         });
@@ -1988,6 +2041,11 @@ function update(dt) {
         } else {
           tgt.slowUntil = state.time + p.slowTime;
           tgt.slowFactor = p.slowFactor;
+        }
+        // El Zafiro deja "mojado" al objetivo (para la reacción de vapor)
+        if (p.source && p.source.type === "sapphire" && !tgt.dead) {
+          tgt.wetUntil = state.time + 3;
+          checkSteam(tgt);
         }
       }
     }
@@ -2010,7 +2068,7 @@ function update(dt) {
     if (sen.novaCd > 0) sen.novaCd = Math.max(0, sen.novaCd - dt);
     sen.cd -= dt;
     if (sen.cd <= 0) {
-      const tgt = pickTarget({ x: sen.x, y: sen.y, priority: "core" }, ss.range);
+      const tgt = pickTarget({ x: sen.x, y: sen.y, priority: "core", air: true }, ss.range);
       if (tgt) {
         sen.cd = ss.rate;
         state.projectiles.push({
@@ -2307,6 +2365,10 @@ function render() {
   if (state.running && !state.gameOver) {
     drawEdgeIndicators();
     drawBossBar();
+  }
+  if (state.flash > 0.01) {
+    ctx.fillStyle = `rgba(${state.flashColor},${state.flash * 0.4})`;
+    ctx.fillRect(0, 0, W, H);
   }
   if (meta.settings.showFps) {
     ctx.fillStyle = fpsEma < 45 ? "#ff5470" : "rgba(154,146,201,0.9)";
@@ -2905,6 +2967,30 @@ function drawEnemy(e) {
       ctx.textAlign = "center";
       ctx.fillText(D.BOSS_KINDS[e.bossKind].icon, 0, -r - 8);
     }
+  } else if (e.shape === "wisp") {
+    // Volador: flota sobre su sombra
+    const lift = 16 + Math.sin(state.time * 4 + e.wobbleSeed) * 3;
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(0, 6, r * 0.9, r * 0.32, 0, 0, TAU);
+    ctx.fill();
+    ctx.translate(0, -lift);
+    ctx.shadowColor = color; ctx.shadowBlur = 12;
+    ctx.fillStyle = flash > 0.4 ? "#ffffff" : color;
+    ctx.rotate(state.time * 1.5 + e.wobbleSeed);
+    ctx.beginPath();
+    ctx.moveTo(0, -r); ctx.lineTo(r * 0.7, 0); ctx.lineTo(0, r); ctx.lineTo(-r * 0.7, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.rotate(-(state.time * 1.5 + e.wobbleSeed));
+    // pequeñas alas
+    ctx.globalAlpha *= 0.6;
+    ctx.beginPath();
+    ctx.ellipse(-r, 0, r * 0.6, r * 0.25, 0.5, 0, TAU);
+    ctx.ellipse(r, 0, r * 0.6, r * 0.25, -0.5, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha /= 0.6;
   } else if (e.shape === "ghost") {
     ctx.globalAlpha = (e.phased ? 0.28 : 0.92) * ctx.globalAlpha;
     ctx.beginPath();
@@ -2972,10 +3058,11 @@ function drawEnemy(e) {
   if (e.hp < e.maxHp) {
     const w = e.radius * 2.2;
     const frac = clamp(e.hp / e.maxHp, 0, 1);
+    const by = e.y - e.radius - 9 - (e.flying ? 16 : 0);
     ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(e.x - w / 2, e.y - e.radius - 9, w, 4);
+    ctx.fillRect(e.x - w / 2, by, w, 4);
     ctx.fillStyle = frac > 0.5 ? "#52e5a5" : frac > 0.25 ? "#ffc94a" : "#ff5470";
-    ctx.fillRect(e.x - w / 2, e.y - e.radius - 9, w * frac, 4);
+    ctx.fillRect(e.x - w / 2, by, w * frac, 4);
   }
 }
 
@@ -3978,6 +4065,9 @@ function resetGame(difficulty, opts) {
   state.comboTimer = 0;
   state.time = 0;
   state.shake = 0;
+  state.flash = 0;
+  state.slowmo = 0;
+  state.flyingHintShown = false;
   state.stats = freshStats();
   state.sentinel = meta.unlocked.sentinel
     ? { x: CX, y: CY - 70, cd: 0, novaCd: 0, trail: [], level: 0, xp: 0 }

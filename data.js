@@ -44,9 +44,9 @@
     },
     sapphire: {
       name: { es: "Zafiro", en: "Sapphire" }, gem: "🔵", color: "#4ad9e8", glow: "rgba(74,217,232,",
-      cost: 80, dmg: 4, rate: 0.5, range: 130, projSpeed: 460,
+      cost: 80, dmg: 4, rate: 0.5, range: 130, projSpeed: 460, air: true,
       slowFactor: 0.5, slowTime: 1.6,
-      desc: { es: "Ralentiza a los enemigos un 50%.", en: "Slows enemies by 50%." }, unlockWave: 0,
+      desc: { es: "Ralentiza (y moja) a los enemigos. Alcanza a los voladores.", en: "Slows (and wets) enemies. Hits fliers." }, unlockWave: 0,
     },
     emerald: {
       name: { es: "Esmeralda", en: "Emerald" }, gem: "🟢", color: "#52e5a5", glow: "rgba(82,229,165,",
@@ -55,18 +55,18 @@
     },
     amethyst: {
       name: { es: "Amatista", en: "Amethyst" }, gem: "🟣", color: "#b06df0", glow: "rgba(176,109,240,",
-      cost: 130, dmg: 11, rate: 0.85, range: 160, chain: 4, chainRange: 120,
-      desc: { es: "Rayo que salta entre 4 enemigos.", en: "Lightning that chains to 4 enemies." }, unlockWave: 3,
+      cost: 130, dmg: 11, rate: 0.85, range: 160, chain: 4, chainRange: 120, air: true,
+      desc: { es: "Rayo que salta entre 4 enemigos. Alcanza a los voladores.", en: "Lightning that chains to 4 enemies. Hits fliers." }, unlockWave: 3,
     },
     amber: {
       name: { es: "Ámbar", en: "Amber" }, gem: "🟡", color: "#ffc94a", glow: "rgba(255,201,74,",
-      cost: 150, dmg: 42, rate: 1.7, range: 270, projSpeed: 780, pierce: 3,
-      desc: { es: "Francotirador: perfora hasta 3 enemigos.", en: "Sniper: pierces up to 3 enemies." }, unlockWave: 4,
+      cost: 150, dmg: 42, rate: 1.7, range: 270, projSpeed: 780, pierce: 3, air: true,
+      desc: { es: "Francotirador: perfora 3 enemigos. Alcanza a los voladores.", en: "Sniper: pierces 3 enemies. Hits fliers." }, unlockWave: 4,
     },
     diamond: {
       name: { es: "Diamante", en: "Diamond" }, gem: "⚪", color: "#e8f4ff", glow: "rgba(232,244,255,",
-      cost: 200, dmg: 26, range: 175, beam: true,
-      desc: { es: "Láser continuo que se intensifica.", en: "Continuous ramping laser." }, unlockWave: 6,
+      cost: 200, dmg: 26, range: 175, beam: true, air: true,
+      desc: { es: "Láser continuo que se intensifica. Alcanza a los voladores.", en: "Continuous ramping laser. Hits fliers." }, unlockWave: 6,
     },
     // Torres especiales: se compran una vez con fragmentos en el menú
     opal: {
@@ -153,18 +153,20 @@
     armored: { hp: 130, speed: 26, radius: 16, dmg: 18, bounty: 26, score: 50, color: "#9aa7c7", shape: "armored", slowImmune: true, critImmune: true },
     digger: { hp: 60, speed: 48, radius: 13, dmg: 16, bounty: 20, score: 40, color: "#d8a05c", shape: "digger" },
     warden: { hp: 90, speed: 32, radius: 15, dmg: 14, bounty: 30, score: 60, color: "#c9a2ff", shape: "warden" },
+    wisp: { hp: 30, speed: 70, radius: 11, dmg: 12, bounty: 22, score: 40, color: "#8be8ff", shape: "wisp", flying: true },
+    reaper: { hp: 150, speed: 58, radius: 15, dmg: 18, bounty: 34, score: 70, color: "#a0f0ff", shape: "wisp", flying: true },
     boss: { hp: 700, speed: 20, radius: 34, dmg: 60, bounty: 160, score: 400, color: "#ff4a6e", shape: "boss" },
     mega: { hp: 2200, speed: 13, radius: 48, dmg: 100, bounty: 420, score: 1200, color: "#ff2255", shape: "boss", mega: true },
   };
   const ENEMY_ICONS = {
     mote: "●", swift: "▲", brute: "⬢", splitter: "◐", healer: "✚",
-    ghost: "👻", armored: "▣", digger: "⛏", warden: "◈", boss: "☠", mega: "💀",
+    ghost: "👻", armored: "▣", digger: "⛏", warden: "◈", wisp: "▽", reaper: "◇", boss: "☠", mega: "💀",
   };
   // Paleta alternativa (accesible) para el modo daltónico: Okabe-Ito adaptada
   const ENEMY_COLORS_CB = {
     mote: "#56B4E9", swift: "#E69F00", brute: "#0072B2", splitter: "#CC79A7",
     healer: "#009E73", ghost: "#F0E442", armored: "#999999", digger: "#D55E00",
-    warden: "#CC79A7", boss: "#E51E32", mega: "#B2182B",
+    warden: "#CC79A7", wisp: "#56B4E9", reaper: "#0072B2", boss: "#E51E32", mega: "#B2182B",
   };
 
   // ---------- Jefes con identidad (rotación en oleadas 5,15,20…; la 10/20/30 es mega) ----------
@@ -435,6 +437,8 @@
       if (n >= 7) add("armored", n / 3);
       if (n >= 8) add("digger", n / 4);
       if (n >= 9) add("warden", 1 + Math.floor(n / 8));
+      if (n >= 6) add("wisp", 2 + Math.floor(n / 3));
+      if (n >= 11) add("reaper", 1 + Math.floor(n / 9));
     }
     return c;
   }
@@ -469,7 +473,9 @@
       evolveTitle: "⬆ Evolucionar", evolveFor: (c) => `Evolucionar (${c} 💎)`,
       upgradeFor: (c) => `⬆ Mejorar (${c} 💎)`, maxLevel: "Nivel máximo",
       sellFor: (c) => `🗑 Vender (+${c} 💎)`, prio: "🎯",
-      prioCore: "Cercano al núcleo", prioStrong: "Más fuerte", prioWeak: "Más débil",
+      prioCore: "Cercano al núcleo", prioStrong: "Más fuerte", prioWeak: "Más débil", prioFar: "Más lejano",
+      steam: "¡VAPOR!", flyingHint: "▽ Voladores: solo Zafiro, Amatista, Ámbar y Diamante (y poderes) los alcanzan",
+      streak: (n) => n >= 25 ? "¡LEGENDARIO!" : n >= 20 ? "¡IMPARABLE!" : n >= 15 ? "¡EN RACHA!" : "¡COMBO!",
       lvl: "Nivel", kills: "bajas", clickUpgrade: (c) => `Clic: mejorar por ${c} 💎`,
       clickEvolve: "Clic: elegir evolución", rightSell: (c) => `Clic dcho: vender +${c} 💎 · T: prioridad`,
       dmgLabel: "Daño", rangeLabel: "Alcance", rateLabel: "Cadencia", dpsLabel: "DPS",
@@ -566,7 +572,9 @@
       evolveTitle: "⬆ Evolve", evolveFor: (c) => `Evolve (${c} 💎)`,
       upgradeFor: (c) => `⬆ Upgrade (${c} 💎)`, maxLevel: "Max level",
       sellFor: (c) => `🗑 Sell (+${c} 💎)`, prio: "🎯",
-      prioCore: "Closest to core", prioStrong: "Strongest", prioWeak: "Weakest",
+      prioCore: "Closest to core", prioStrong: "Strongest", prioWeak: "Weakest", prioFar: "Farthest",
+      steam: "STEAM!", flyingHint: "▽ Fliers: only Sapphire, Amethyst, Amber and Diamond (and powers) can hit them",
+      streak: (n) => n >= 25 ? "LEGENDARY!" : n >= 20 ? "UNSTOPPABLE!" : n >= 15 ? "ON FIRE!" : "COMBO!",
       lvl: "Level", kills: "kills", clickUpgrade: (c) => `Click: upgrade for ${c} 💎`,
       clickEvolve: "Click: choose evolution", rightSell: (c) => `Right-click: sell +${c} 💎 · T: priority`,
       dmgLabel: "Damage", rangeLabel: "Range", rateLabel: "Rate", dpsLabel: "DPS",
